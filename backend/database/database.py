@@ -43,7 +43,8 @@ tables = [
     "LEADERBOARDS",
     "MINI_GAMES",
     "INVENTORY",
-    "PETS",
+    "GUINEA_PIGS",
+    "GENETICS",
     "SHOP_ITEMS",
     "USERS",
 ]
@@ -69,22 +70,33 @@ CREATE TABLE USERS (
 );
 
 -- =============================
--- PETS
+-- GUINEA PIGS
 -- Each record stores one guinea pig
 -- =============================
-CREATE TABLE PETS (
+CREATE TABLE GUINEA_PIGS (
     id INTEGER PRIMARY KEY,
     owner_id INTEGER NOT NULL,
     name TEXT,
-    species TEXT CHECK(species IN ('guinea_pig', 'hamster', 'predator')),
-    color TEXT,
-    age_days INTEGER DEFAULT 0,
-    health INTEGER CHECK(health BETWEEN 0 AND 100) DEFAULT 100,
-    happiness INTEGER CHECK(happiness BETWEEN 0 AND 100) DEFAULT 100,
+    genetic_id INTEGER NOT NULL,
+    age_months INTEGER DEFAULT 0,
     hunger INTEGER CHECK(hunger BETWEEN 0 AND 3) DEFAULT 3,
-    cleanliness INTEGER CHECK(cleanliness BETWEEN 0 AND 100) DEFAULT 100,
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (owner_id) REFERENCES USERS(id)
+    FOREIGN KEY (owner_id) REFERENCES USERS(id),
+    FOREIGN KEY (genetic_id) REFERENCES GENETICS(id)
+);
+
+-- =============================
+-- GENETICS
+-- Each record stores one guinea pig
+-- =============================
+CREATE TABLE GENETICS (
+    id INTEGER PRIMARY KEY,
+    speed INTEGER CHECK (speed BETWEEN 1 AND 10) DEFAULT 1,
+    endurance INTEGER CHECK (endurance BETWEEN 1 AND 10) DEFAULT 1,
+    head_color TEXT CHECK (head_color IN ('BB', 'Bw', 'ww')),
+    middle_color TEXT CHECK (middle_color IN ('BB', 'Bw', 'ww')),
+    accent_color TEXT CHECK (accent_color IN ('BB', 'Bw', 'ww')),
+    coat TEXT CHECK (coat IN ('SS', 'Sf', 'ff'))
 );
 
 -- =============================
