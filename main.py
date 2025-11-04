@@ -3,6 +3,7 @@ import homescreen
 import details_page
 import breeding
 import minigame
+import title
 # from guineapig import Guineapig 
 
 # Initialize Pygame
@@ -16,7 +17,7 @@ pygame.display.set_caption("My Game")
 clock = pygame.time.Clock() 
 
 # This is your "state machine" variable
-currentmenu = "homescreen"
+currentmenu = "title"
 
 # --- THIS IS THE "MAIN" LOOP ---
 running = True
@@ -48,6 +49,11 @@ while running:
         if new_state:
             currentmenu = new_state
 
+    elif currentmenu == 'title':
+        new_state = title.title_update(events)
+        if new_state:
+            currentmenu = new_state
+
     # (We still need to add 'gameplay')
     # elif currentmenu == 'gameplay':
     #     ...
@@ -68,6 +74,9 @@ while running:
 
     elif currentmenu == 'minigame':
         minigame.minigame_draw(screen)
+
+    elif currentmenu == 'title':
+        title.title_draw(screen)
 
     # (We still need to add 'gameplay')
     # elif currentmenu == 'gameplay':
