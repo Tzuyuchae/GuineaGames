@@ -1,12 +1,18 @@
 import pygame
 import sys
+import os
 from maze import Maze
 from player import Player
 from settings import *
 
+# Path to assets 
+base_path = os.path.dirname(__file__)
+assets_path = os.path.join(base_path, "../assets/audio/")
+
 class Game: 
     def __init__(self): 
         pygame.init()
+        pygame.mixer.init()
 
         # Maze layout: 0 = path, 1 = wall, P = player, E = exit
         self.maze_layout = [
@@ -51,8 +57,14 @@ class Game:
             print("You Win!")
             self.running = False
 
+    def play_music(self, filename):
+        """Play background music."""
+        pygame.mixer.music.load(os.path.join(assets_path, filename))
+        pygame.mixer.music.play(-1)  # Loop indefinitely
+    
     def run(self):
         """Main game loop."""
+        self.play_music("music.wav")
         while self.running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
