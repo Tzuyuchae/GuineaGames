@@ -66,7 +66,9 @@ CREATE TABLE USERS (
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_login DATETIME
+    last_login DATETIME,
+    balance INTEGER DEFAULT 0,
+    food INTEGER DEFAULT 0
 );
 
 -- =============================
