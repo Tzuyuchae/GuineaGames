@@ -37,7 +37,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self.running = True
 
-    def handle_input(self):
+    def handle_player_input(self):
         """Handle user input for player movement."""
         keys = pygame.key.get_pressed()
         if keys[pygame.K_UP] or keys[pygame.K_w]:
@@ -49,11 +49,11 @@ class Game:
         elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.player.move(1, 0, self.maze)
 
-    def check_win(self):
-        """Check if the player has reached the exit."""
+    def check_lose(self):
+        """Check if the player has collided with enemy."""
         # Ensure we don't index out of bounds; the maze layout should be consistent.
         if self.PACMAN_MAZE[self.player.pos_y][self.player.pos_x] == 'E':
-            print("You Win!")
+            print("You Lose!")
             self.running = False
 
     def play_music(self, filename):
@@ -69,8 +69,8 @@ class Game:
                 if event.type == pygame.QUIT:
                     self.running = False
 
-            self.handle_input()
-            self.check_win()
+            self.handle_player_input()
+            self.check_lose()
 
             self.screen.fill(BLACK)
             self.maze.draw(self.screen)
