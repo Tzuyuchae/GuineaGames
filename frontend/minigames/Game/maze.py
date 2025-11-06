@@ -15,13 +15,13 @@ class Maze:
             for x, tile in enumerate(row):
                 rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
                 if tile == "1":
-                    pygame.draw.rect(screen, BLUE, rect)
+                    pygame.draw.rect(screen, BLUE, rect) # Blue for walls
                 elif tile == "2":
-                    pygame.draw.rect(screen, GREEN, rect)
+                    pygame.draw.rect(screen, GREEN, rect) # Green for fruits
                 elif tile == "E":
                     pygame.draw.rect(screen, GOLD, rect)  # Gold color for exit (Will represent enemy later)
                 elif tile == "3" or tile == "X" or tile == "S":
-                    pygame.draw.rect(screen, BLACK, rect)  # Black for out of bounds
+                    pygame.draw.rect(screen, BLACK, rect)  # Black for out of bounds, enemy spawn exit, and enemy spawn points
 
     def is_wall(self, x, y, tile="1"): 
         """Checks if the tile is walkable or not (not a wall)"""
