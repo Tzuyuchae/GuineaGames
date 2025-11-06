@@ -51,6 +51,9 @@ class Enemy:
         # Convert back to strings
         return [''.join(row) for row in new_grid]
     
+    def enemy_pos(self):
+        return (self.position[0], self.position[1])
+
     def draw(self, screen):
         """Draw the enemy on the given screen."""
         rect = pygame.Rect(self.position[0] * TILE_SIZE, self.position[1] * TILE_SIZE, TILE_SIZE, TILE_SIZE)

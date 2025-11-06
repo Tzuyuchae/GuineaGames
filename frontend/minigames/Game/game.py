@@ -57,7 +57,7 @@ class Game:
     def check_lose(self):
         """Check if the player has collided with enemy."""
         # Ensure we don't index out of bounds; the maze layout should be consistent.
-        if self.PACMAN_MAZE[self.player.pos_y][self.player.pos_x] == 'E':
+        if self.player.player_pos() == self.enemy.enemy_pos():
             print("You Lose!")
             self.running = False
 

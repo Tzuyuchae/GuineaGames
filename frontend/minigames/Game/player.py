@@ -42,6 +42,9 @@ class Player:
         # Convert back to strings
         return [''.join(row) for row in new_grid]
 
+    def player_pos(self):
+        return (self.pos_x, self.pos_y)
+
     def draw(self, screen):
         """Draw the player on the given screen."""
         rect = pygame.Rect(self.pos_x * TILE_SIZE, self.pos_y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
