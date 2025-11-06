@@ -1,9 +1,32 @@
-# For now we have the original pac-man maze hardcoded here.
-# Below is a conversion script to help convert an ASCII maze into the format we need.
-
+# maze_generation.py
 import random
+import os
 
-maze_ascii = """
+# Define file path for maps for future use
+base_path = os.path.dirname(__file__)
+assets_path = os.path.join(base_path, "../assets/layouts/")
+
+class MazeGenerator:
+    """
+    Generates a maze layout either from a hardcoded ASCII design
+    or (in future versions) from procedural generation.
+    """
+
+    def __init__(self, ascii_maze=None, fruit_chance=0.1, seed=None):
+        self.ascii_maze = ascii_maze or self.default_maze()
+        self.fruit_chance = fruit_chance
+        self.seed = seed
+        self.mapping = {
+            '|': '1',   # wall
+            '.': '0',   # walkable path
+            '_': '3',   # Out of bounds
+            ' ': '0',   # empty space
+            '\n': '\n'
+        }
+
+    def default_maze(self):
+        """Returns a default Pac-Man-style ASCII maze."""
+        return """
 ||||||||||||||||||||||||||||
 |............||............|
 |.||||.|||||.||.|||||.||||.|
@@ -37,32 +60,48 @@ _____|.||.||||||||.||.|_____
 ||||||||||||||||||||||||||||
 """
 
-# Conversion dictionary
-mapping = {
-    '|': '1',
-    '.': '0',
-    '_': '0',   # tunnels or empty space treated as walkable
-    ' ': '0',
-    '\n': '\n'
-}
+    def random_map_choice(self):
+        pass
 
-# Convert maze
-converted = ''.join(mapping.get(ch, ch) for ch in maze_ascii)
+    def convert_ascii(self):
+        """Converts ASCII maze symbols into numerical grid representation."""
+        converted = ''.join(self.mapping.get(ch, ch) for ch in self.ascii_maze)
+        # Split into lines and remove any empty ones
+        grid = [row for row in converted.strip().splitlines() if row]
+        return grid
 
-# Split into rows and remove empty lines
-maze_grid = [row for row in converted.strip().splitlines() if row]
+    def add_fruits(self, grid):
+        """Randomly add fruits ('2') to the maze."""
+        if self.seed is not None:
+            random.seed(self.seed)
 
-# Add random fruits everywhere there's a '0' with a small probability
-random.seed(42)  # For reproducibility
-for r in range(len(maze_grid)):
-    new_row = ''
-    for c in range(len(maze_grid[r])):
-        if maze_grid[r][c] == '0' and random.random() < 0.1:  # 10% chance
-            new_row += '2'  # '2' represents a fruit
-        else:
-            new_row += maze_grid[r][c]
-    maze_grid[r] = new_row
+        new_grid = []
+        for row in grid:
+            new_row = ''
+            for tile in row:
+                if tile == '0' and random.random() < self.fruit_chance:
+                    new_row += '2'  # fruit
+                else:
+                    new_row += tile
+            new_grid.append(new_row)
+        return new_grid
 
-# Print result
-for row in maze_grid:
-    print(f'"{row}",')
+    def generate(self):
+        """
+        Full generation process:
+        1. Convert ASCII → numeric grid
+        2. Add random fruits
+        3. Return final grid
+        """
+        base_grid = self.convert_ascii()
+        final_grid = self.add_fruits(base_grid)
+        return final_grid
+
+
+# Debug/Test Run
+if __name__ == "__main__":
+    generator = MazeGenerator(fruit_chance=0.1, seed=42)
+    maze = generator.generate()
+
+    for row in maze:
+        print(f'"{row}",')
