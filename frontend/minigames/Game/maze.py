@@ -29,3 +29,14 @@ class Maze:
             return self.layout[y][x] == tile
         # Treat coordinates outside the maze as walls
         return True
+    
+    def is_loop(self, max_x, max_y, grid):
+        """Return True when the tile at (x,y) is a loop point.
+
+        Out-of-bounds coordinates are treated as non-loop points.
+        """
+        for y in range(self.rows):
+            for x in range(self.cols):
+                if x == max_x and y == max_y:
+                    if grid[y][x] == '0':
+                        return True

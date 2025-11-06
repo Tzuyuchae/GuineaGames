@@ -54,6 +54,16 @@ class Game:
         elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.player.move(1, 0, self.maze)
 
+    def handle_loops(self):
+        """Handle loop points in the maze."""
+        max_x = self.maze.cols - 1
+        max_y = self.maze.rows - 1
+        if self.maze.is_loop(max_x, self.player.pos_y, self.PACMAN_MAZE) and self.player.pos_x == max_x:
+            self.player.pos_x = 0
+        elif self.maze.is_loop(0, self.player.pos_y, self.PACMAN_MAZE) and self.player.pos_x == 0:
+            self.player.pos_x = max_x
+            
+
     def check_lose(self):
         """Check if the player has collided with enemy."""
         # Ensure we don't index out of bounds; the maze layout should be consistent.
@@ -83,6 +93,7 @@ class Game:
             self.handle_player_input()
             self.check_lose()
             self.check_win()
+            self.handle_loops()
 
             # Draw maze, player, enemy, and fruits
             self.screen.fill(BLACK)
