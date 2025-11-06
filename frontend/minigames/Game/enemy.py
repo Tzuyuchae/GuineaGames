@@ -3,13 +3,18 @@
     # and causes the player to lose if they come into contact with it.
 import pygame 
 import random
+import os
 from settings import TILE_SIZE, GOLD
 from maze_generator import MazeGenerator
+
+# Define path to enemy assets (if needed in future)
+base_path = os.path.dirname(__file__)
+assets_path = os.path.join(base_path, "../assets/images/")
 
 class Enemy:
     def __init__(self, pos_x=0, pos_y=0, color=GOLD, seed=None):
         self.position = [pos_x, pos_y]
-        self.color = GOLD
+        self.color = color
         self.seed = seed
     
     def move_towards_player(self, player_pos, maze):
@@ -41,6 +46,7 @@ class Enemy:
         if spawn_points:
             enemy_x, enemy_y = random.choice(spawn_points)
             new_grid[enemy_y][enemy_x] = 'E'
+            self.position = [enemy_x, enemy_y]
         
         # Convert back to strings
         return [''.join(row) for row in new_grid]

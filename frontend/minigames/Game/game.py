@@ -6,6 +6,7 @@ from player import Player
 from settings import *
 from maze_generator import MazeGenerator
 from enemy import Enemy
+from fruits import Fruit
 
 # Path to assets 
 base_path = os.path.dirname(__file__)
@@ -23,12 +24,16 @@ class Game:
         self.PACMAN_MAZE = generator.generate()
         
         # Initialize player
-        self.player = Player()
+        self.player = Player(seed=42)
         self.PACMAN_MAZE = self.player.add_player(self.PACMAN_MAZE)
 
         # Initialize Enemy
-        self.enemy = Enemy()
+        self.enemy = Enemy(seed=42)
         self.PACMAN_MAZE = self.enemy.add_enemies(self.PACMAN_MAZE)
+        
+        # Initialize Fruit 
+        self.fruit = Fruit(fruit_chance=0.1, seed=42)
+        self.PACMAN_MAZE = self.fruit.add_fruits(self.PACMAN_MAZE)
 
         self.maze = Maze(self.PACMAN_MAZE)
         self.screen = pygame.display.set_mode((self.maze.width, self.maze.height))
@@ -72,9 +77,14 @@ class Game:
             self.handle_player_input()
             self.check_lose()
 
+            # Draw maze, player, enemy, and fruits
             self.screen.fill(BLACK)
             self.maze.draw(self.screen)
             self.player.draw(self.screen)
+            self.enemy.move_towards_player((self.player.pos_x, self.player.pos_y), self.maze)
+            self.enemy.draw(self.screen)
+            self.PACMAN_MAZE = self.fruit.if_collected((self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE)
+            self.fruit.draw(self.screen, self.PACMAN_MAZE)
 
             pygame.display.flip()
             self.clock.tick(FPS)
