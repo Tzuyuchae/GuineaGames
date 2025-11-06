@@ -71,7 +71,6 @@ class Game:
         elif self.maze.is_loop(self.player.pos_x, 0, self.PACMAN_MAZE) and self.player.pos_y == 0:
             self.player.pos_y = max_y
             
-
     def check_lose(self):
         """Check if the player has collided with enemy."""
         # Ensure we don't index out of bounds; the maze layout should be consistent.
