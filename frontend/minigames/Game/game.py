@@ -24,11 +24,15 @@ class Game:
         
         # Initialize player
         self.player = Player()
-        self.player.player_spawn(Maze(self.PACMAN_MAZE))
+        self.PACMAN_MAZE = self.player.add_player(self.PACMAN_MAZE)
+
+        # Initialize Enemy
+        self.enemy = Enemy()
+        self.PACMAN_MAZE = self.enemy.add_enemies(self.PACMAN_MAZE)
 
         self.maze = Maze(self.PACMAN_MAZE)
         self.screen = pygame.display.set_mode((self.maze.width, self.maze.height))
-        pygame.display.set_caption("Procedural Maze")
+        pygame.display.set_caption("Pac-Man Maze Game")
 
         self.clock = pygame.time.Clock()
         self.running = True

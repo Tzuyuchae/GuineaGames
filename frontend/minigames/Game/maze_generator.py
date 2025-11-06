@@ -88,27 +88,6 @@ _____|.||.||||||||.||.|_____
             new_grid.append(new_row)
         return new_grid
 
-    def add_enemies(self, grid):
-        """Randomly add enemies ('E') to the maze."""
-        if self.seed is not None:
-            random.seed(self.seed)
-        
-        # Find all spawn points
-        spawn_points = []
-        for y, row in enumerate(grid):
-            for x, tile in enumerate(row):
-                if tile == 'S':
-                    spawn_points.append((x, y))
-        
-        # If there are spawn points, randomly select one for the enemy
-        new_grid = [list(row) for row in grid]  # Convert strings to lists for easier modification
-        if spawn_points:
-            enemy_x, enemy_y = random.choice(spawn_points)
-            new_grid[enemy_y][enemy_x] = 'E'
-        
-        # Convert back to strings
-        return [''.join(row) for row in new_grid]
-
     def generate(self):
         """
         Full generation process:
@@ -118,8 +97,7 @@ _____|.||.||||||||.||.|_____
         """
         base_grid = self.convert_ascii()
         fruit_grid = self.add_fruits(base_grid)
-        final_grid = self.add_enemies(fruit_grid)
-        return final_grid
+        return fruit_grid
 
 
 # Debug/Test Run
