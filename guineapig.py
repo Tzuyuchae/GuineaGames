@@ -21,6 +21,4 @@ class Guineapig:
         """A custom method to draw the object on the screen"""
         surface.blit(self.image, self.rect)
         
-    # You could add an update() method here later for movement
-    # def update(self):
-    #     self.rect.x += 1
+   
