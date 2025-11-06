@@ -64,6 +64,9 @@ _____|.||.||||||||.||.|_____
 
     def random_map_choice(self):
         pass
+    ### FIX ME ###
+    # Given the file, we have to be able to randomly select a map from the assets/layouts folder
+    # This function should list all files in that directory, randomly select one, and read its contents
 
     def convert_ascii(self):
         """Converts ASCII maze symbols into numerical grid representation."""

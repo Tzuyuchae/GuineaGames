@@ -16,12 +16,6 @@ class Maze:
                 rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
                 if tile == "1":
                     pygame.draw.rect(screen, BLUE, rect) # Blue for walls
-                    """
-                elif tile == "2":
-                    pygame.draw.rect(screen, GREEN, rect) # Green for fruits
-                elif tile == "E":
-                    pygame.draw.rect(screen, GOLD, rect)  # Gold color for exit (Will represent enemy later)
-                    """
                 elif tile == "3" or tile == "X" or tile == "S":
                     pygame.draw.rect(screen, BLACK, rect)  # Black for out of bounds, enemy spawn exit, and enemy spawn points
 
