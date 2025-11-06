@@ -61,6 +61,12 @@ class Game:
             print("You Lose!")
             self.running = False
 
+    def check_win(self):
+        """Check if the player has collected all fruits."""
+        if self.fruit.all_fruits_collected(self.PACMAN_MAZE):
+            print("You Win!")
+            self.running = False
+
     def play_music(self, filename):
         """Play background music."""
         pygame.mixer.music.load(os.path.join(assets_path, filename))
@@ -76,12 +82,13 @@ class Game:
 
             self.handle_player_input()
             self.check_lose()
+            self.check_win()
 
             # Draw maze, player, enemy, and fruits
             self.screen.fill(BLACK)
             self.maze.draw(self.screen)
             self.player.draw(self.screen)
-            self.enemy.move_towards_player((self.player.pos_x, self.player.pos_y), self.maze)
+            #self.enemy.move_towards_player((self.player.pos_x, self.player.pos_y), self.maze)
             self.enemy.draw(self.screen)
             self.PACMAN_MAZE = self.fruit.if_collected((self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE)
             self.fruit.draw(self.screen, self.PACMAN_MAZE)

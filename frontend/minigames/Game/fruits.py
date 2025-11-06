@@ -39,6 +39,13 @@ class Fruit:
             grid[y] = ''.join(new_row)
         return grid
 
+    def all_fruits_collected(self, grid):
+        """Check if all fruits have been collected."""
+        for row in grid:
+            if '2' in row:
+                return False
+        return True
+
     def draw(self, screen, grid):
         """Draw fruits on the given screen based on the grid layout."""
         for y, row in enumerate(grid):
