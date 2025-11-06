@@ -19,12 +19,12 @@ class Maze:
                 elif tile == "2":
                     pygame.draw.rect(screen, GREEN, rect)
                 elif tile == "E":
-                    pygame.draw.rect(screen, GOLD, rect)  # Gold color for exit
-                elif tile == "3":
+                    pygame.draw.rect(screen, GOLD, rect)  # Gold color for exit (Will represent enemy later)
+                elif tile == "3" or tile == "X" or tile == "S":
                     pygame.draw.rect(screen, BLACK, rect)  # Black for out of bounds
 
-    def is_wall(self, x, y): 
+    def is_wall(self, x, y, tile="1"): 
         """Checks if the tile is walkable or not (not a wall)"""
         if 0 <= y < self.rows and 0 <= x < self.cols:
-            return self.layout[y][x] != "1"
+            return self.layout[y][x] != tile
         return False

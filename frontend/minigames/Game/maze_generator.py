@@ -17,11 +17,13 @@ class MazeGenerator:
         self.fruit_chance = fruit_chance
         self.seed = seed
         self.mapping = {
-            '|': '1',   # wall
-            '.': '0',   # walkable path
-            '_': '3',   # Out of bounds
-            ' ': '0',   # empty space
-            '\n': '\n'
+            '|': '1',  # Wall
+            '.': '0',  # Walkable path
+            '_': '3',  # Out of bounds
+            '-': 'X',  # Enemy spawn exit
+            ' ': '0',  # Empty space
+            '*': 'S',  # Enemy spawns
+            '\n': '\n' # Newline
         }
 
     def default_maze(self):
@@ -40,9 +42,9 @@ class MazeGenerator:
 _____|.|||||.||.|||||.|_____
 _____|.||..........||.|_____
 _____|.||.|||--|||.||.|_____
-||||||.||.|______|.||.||||||
-..........|______|..........
-||||||.||.|______|.||.||||||
+||||||.||.|******|.||.||||||
+..........|******|..........
+||||||.||.|******|.||.||||||
 _____|.||.||||||||.||.|_____
 _____|.||..........||.|_____
 _____|.||.||||||||.||.|_____
@@ -86,6 +88,27 @@ _____|.||.||||||||.||.|_____
             new_grid.append(new_row)
         return new_grid
 
+    def add_enemies(self, grid):
+        """Randomly add enemies ('E') to the maze."""
+        if self.seed is not None:
+            random.seed(self.seed)
+        
+        # Find all spawn points
+        spawn_points = []
+        for y, row in enumerate(grid):
+            for x, tile in enumerate(row):
+                if tile == 'S':
+                    spawn_points.append((x, y))
+        
+        # If there are spawn points, randomly select one for the enemy
+        new_grid = [list(row) for row in grid]  # Convert strings to lists for easier modification
+        if spawn_points:
+            enemy_x, enemy_y = random.choice(spawn_points)
+            new_grid[enemy_y][enemy_x] = 'E'
+        
+        # Convert back to strings
+        return [''.join(row) for row in new_grid]
+
     def generate(self):
         """
         Full generation process:
@@ -94,7 +117,8 @@ _____|.||.||||||||.||.|_____
         3. Return final grid
         """
         base_grid = self.convert_ascii()
-        final_grid = self.add_fruits(base_grid)
+        fruit_grid = self.add_fruits(base_grid)
+        final_grid = self.add_enemies(fruit_grid)
         return final_grid
 
 
