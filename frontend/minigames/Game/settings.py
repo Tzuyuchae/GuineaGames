@@ -1,5 +1,5 @@
 # Game Settings
-TILE_SIZE = 50 
+TILE_SIZE = 20
 FPS = 10
 
 # Colors

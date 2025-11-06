@@ -4,7 +4,6 @@ import os
 from maze import Maze
 from player import Player
 from settings import *
-from maze_generator import MazeGenerator
 
 # Path to assets 
 base_path = os.path.dirname(__file__)
@@ -16,20 +15,53 @@ class Game:
         pygame.mixer.init()
 
         # Maze layout: 0 = path, 1 = wall, P = player, E = exit
-        generator = MazeGenerator(21, 15)  # odd numbers work best
-        self.maze_layout = generator.generate()
+        # in maze.py or imported into Game
+        self.PACMAN_MAZE = [
+            "1111111111111111111111111111",
+            "1000000000000110000000000001",
+            "1011110111110110111110111101",
+            "1010010100010110100010100101",
+            "1011110111110110111110111101",
+            "1000000000000000000000000001",
+            "1011110110111111110110111101",
+            "1011110110111111110110111101",
+            "1000000110000110000110000001",
+            "1111110111110110111110111111",
+            "0000010111110110111110100000",
+            "0000010110000000000110100000",
+            "0000010110111--1110110100000",
+            "1111110110100000010110111111",
+            "0000000000100000010000000000",
+            "1111110110100000010110111111",
+            "0000010110111111110110100000",
+            "0000010110000000000110100000",
+            "0000010110111111110110100000",
+            "1111110110111111110110111111",
+            "1000000000000110000000000001",
+            "1011110111110110111110111101",
+            "1011110111110110111110111101",
+            "1000110000000000000000110001",
+            "1110110110111111110110110111",
+            "1110110110111111110110110111",
+            "1000000110000110000110000001",
+            "1011111111110110111111111101",
+            "1011111111110110111111111101",
+            "1000000000000000000000000001",
+            "1111111111111111111111111111",
+        ]
+
 
         # Find a place for the player
-        for y, row in enumerate(self.maze_layout):
+        for y, row in enumerate(self.PACMAN_MAZE):
             for x, tile in enumerate(row):
                 if tile == "0":
-                    self.player = Player(x, y)
+                    self.player_start = Player(x, y)
                     break
             else:
                 continue
             break
 
-        self.maze = Maze(self.maze_layout)
+        self.maze = Maze(self.PACMAN_MAZE)
         self.screen = pygame.display.set_mode((self.maze.width, self.maze.height))
         pygame.display.set_caption("Procedural Maze")
 
@@ -51,7 +83,7 @@ class Game:
     def check_win(self):
         """Check if the player has reached the exit."""
         # Ensure we don't index out of bounds; the maze layout should be consistent.
-        if self.maze_layout[self.player_start.pos_y][self.player_start.pos_x] == 'E':
+        if self.PACMAN_MAZE[self.player_start.pos_y][self.player_start.pos_x] == 'E':
             print("You Win!")
             self.running = False
 
