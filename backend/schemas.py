@@ -42,8 +42,6 @@ class Pet(PetBase):
     points: int
     genetic_code: Optional[str] = None
     speed: int
-    strength: int
-    intelligence: int
     endurance: int
     last_updated: datetime.datetime
 
@@ -251,8 +249,6 @@ class BreedingOutcome(BaseModel):
 class PetStatsSchema(BaseModel):
     """Pet stats derived from genetics"""
     speed: int
-    strength: int
-    intelligence: int
     endurance: int
     genetic_score: int
 

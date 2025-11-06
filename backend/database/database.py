@@ -34,6 +34,9 @@ DB_PATH = os.path.join(BASE_DIR, "GuineaGames.db")
 sqliteConnection = sqlite3.connect(DB_PATH)
 cursor = sqliteConnection.cursor()
 
+# Enable foreign key constraints
+cursor.execute("PRAGMA foreign_keys = ON;")
+
 # =========================================================
 # Drop old tables and views
 # =========================================================
@@ -93,7 +96,7 @@ CREATE TABLE PETS (
     happiness INTEGER CHECK(happiness BETWEEN 0 AND 100) DEFAULT 100,
     hunger INTEGER CHECK(hunger BETWEEN 0 AND 3) DEFAULT 3,
     cleanliness INTEGER CHECK(cleanliness BETWEEN 0 AND 100) DEFAULT 100,
-    points INTEGER DEFAULT 0,
+    points INTEGER DEFAULT 0 CHECK(points >= 0),
     genetic_code TEXT,
     speed INTEGER CHECK(speed BETWEEN 0 AND 100) DEFAULT 50,
     endurance INTEGER CHECK(endurance BETWEEN 0 AND 100) DEFAULT 50,
@@ -103,7 +106,7 @@ CREATE TABLE PETS (
     for_sale INTEGER DEFAULT 0,
     asking_price INTEGER,
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (owner_id) REFERENCES USERS(id)
+    FOREIGN KEY (owner_id) REFERENCES USERS(id) ON DELETE CASCADE
 );
 
 -- Legacy alias for backward compatibility
@@ -117,7 +120,8 @@ CREATE TABLE INVENTORY (
     user_id INTEGER NOT NULL,
     item_name TEXT NOT NULL,
     quantity INTEGER DEFAULT 0,
-    FOREIGN KEY (user_id) REFERENCES USERS(id)
+    UNIQUE(user_id, item_name),
+    FOREIGN KEY (user_id) REFERENCES USERS(id) ON DELETE CASCADE
 );
 
 -- =============================
@@ -139,7 +143,7 @@ CREATE TABLE LEADERBOARDS (
     score INTEGER DEFAULT 0,
     rank INTEGER,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES USERS(id)
+    FOREIGN KEY (user_id) REFERENCES USERS(id) ON DELETE CASCADE
 );
 
 -- =============================
@@ -152,7 +156,7 @@ CREATE TABLE TRANSACTIONS (
     amount INTEGER DEFAULT 0,
     description TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES USERS(id)
+    FOREIGN KEY (user_id) REFERENCES USERS(id) ON DELETE CASCADE
 );
 
 -- =============================
@@ -161,8 +165,8 @@ CREATE TABLE TRANSACTIONS (
 CREATE TABLE SHOP_ITEMS (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
-    category TEXT CHECK(category IN ('food', 'accessory', 'toy', 'medicine')) DEFAULT 'food',
-    cost INTEGER NOT NULL,
+    category TEXT NOT NULL CHECK(category IN ('food', 'accessory', 'toy', 'medicine')) DEFAULT 'food',
+    cost INTEGER NOT NULL CHECK(cost > 0),
     description TEXT,
     effect TEXT
 );
@@ -197,11 +201,12 @@ CREATE TABLE ALLELES (
 -- =============================
 CREATE TABLE PET_GENETICS (
     id INTEGER PRIMARY KEY,
-    pet_id INTEGER UNIQUE NOT NULL,
+    pet_id INTEGER NOT NULL,
     gene_id INTEGER NOT NULL,
     allele1_id INTEGER NOT NULL,
     allele2_id INTEGER NOT NULL,
-    FOREIGN KEY (pet_id) REFERENCES PETS(id),
+    UNIQUE(pet_id, gene_id),
+    FOREIGN KEY (pet_id) REFERENCES PETS(id) ON DELETE CASCADE,
     FOREIGN KEY (gene_id) REFERENCES GENES(id),
     FOREIGN KEY (allele1_id) REFERENCES ALLELES(id),
     FOREIGN KEY (allele2_id) REFERENCES ALLELES(id)
@@ -218,9 +223,9 @@ CREATE TABLE OFFSPRING (
     breeding_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     punnett_square_data TEXT,
     inheritance_notes TEXT,
-    FOREIGN KEY (parent1_id) REFERENCES PETS(id),
-    FOREIGN KEY (parent2_id) REFERENCES PETS(id),
-    FOREIGN KEY (child_id) REFERENCES PETS(id)
+    FOREIGN KEY (parent1_id) REFERENCES PETS(id) ON DELETE SET NULL,
+    FOREIGN KEY (parent2_id) REFERENCES PETS(id) ON DELETE SET NULL,
+    FOREIGN KEY (child_id) REFERENCES PETS(id) ON DELETE CASCADE
 );
 
 -- =============================
@@ -230,10 +235,10 @@ CREATE TABLE PET_MARKETPLACE (
     id INTEGER PRIMARY KEY,
     pet_id INTEGER UNIQUE NOT NULL,
     seller_id INTEGER NOT NULL,
-    asking_price INTEGER NOT NULL,
+    asking_price INTEGER NOT NULL CHECK(asking_price > 0),
     listed_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (pet_id) REFERENCES PETS(id),
-    FOREIGN KEY (seller_id) REFERENCES USERS(id)
+    FOREIGN KEY (pet_id) REFERENCES PETS(id) ON DELETE CASCADE,
+    FOREIGN KEY (seller_id) REFERENCES USERS(id) ON DELETE CASCADE
 );
 
 -- =============================
@@ -244,12 +249,57 @@ CREATE TABLE PET_SALES_HISTORY (
     pet_id INTEGER NOT NULL,
     seller_id INTEGER NOT NULL,
     buyer_id INTEGER NOT NULL,
-    sale_price INTEGER NOT NULL,
+    sale_price INTEGER NOT NULL CHECK(sale_price > 0),
     sale_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pet_id) REFERENCES PETS(id),
     FOREIGN KEY (seller_id) REFERENCES USERS(id),
     FOREIGN KEY (buyer_id) REFERENCES USERS(id)
 );
+
+-- =============================
+-- INDEXES FOR PERFORMANCE
+-- =============================
+
+-- PETS table indexes
+CREATE INDEX idx_pets_owner_id ON PETS(owner_id);
+CREATE INDEX idx_pets_species ON PETS(species);
+CREATE INDEX idx_pets_for_sale ON PETS(for_sale);
+CREATE INDEX idx_pets_rarity_tier ON PETS(rarity_tier);
+
+-- PET_MARKETPLACE indexes
+CREATE INDEX idx_marketplace_seller_id ON PET_MARKETPLACE(seller_id);
+CREATE INDEX idx_marketplace_pet_id ON PET_MARKETPLACE(pet_id);
+
+-- PET_GENETICS indexes
+CREATE INDEX idx_pet_genetics_pet_id ON PET_GENETICS(pet_id);
+CREATE INDEX idx_pet_genetics_gene_id ON PET_GENETICS(gene_id);
+
+-- ALLELES indexes
+CREATE INDEX idx_alleles_gene_id ON ALLELES(gene_id);
+
+-- OFFSPRING indexes
+CREATE INDEX idx_offspring_parent1 ON OFFSPRING(parent1_id);
+CREATE INDEX idx_offspring_parent2 ON OFFSPRING(parent2_id);
+CREATE INDEX idx_offspring_child ON OFFSPRING(child_id);
+
+-- TRANSACTIONS indexes
+CREATE INDEX idx_transactions_user_id ON TRANSACTIONS(user_id);
+CREATE INDEX idx_transactions_type ON TRANSACTIONS(type);
+CREATE INDEX idx_transactions_timestamp ON TRANSACTIONS(timestamp);
+
+-- INVENTORY indexes
+CREATE INDEX idx_inventory_user_id ON INVENTORY(user_id);
+CREATE INDEX idx_inventory_item ON INVENTORY(item_name);
+
+-- LEADERBOARDS indexes
+CREATE INDEX idx_leaderboards_user_id ON LEADERBOARDS(user_id);
+CREATE INDEX idx_leaderboards_score ON LEADERBOARDS(score DESC);
+
+-- PET_SALES_HISTORY indexes
+CREATE INDEX idx_sales_pet_id ON PET_SALES_HISTORY(pet_id);
+CREATE INDEX idx_sales_buyer_id ON PET_SALES_HISTORY(buyer_id);
+CREATE INDEX idx_sales_seller_id ON PET_SALES_HISTORY(seller_id);
+CREATE INDEX idx_sales_date ON PET_SALES_HISTORY(sale_date);
 """
 
 cursor.executescript(sql_commands)

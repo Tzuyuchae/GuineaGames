@@ -17,6 +17,9 @@ class User(Base):
     inventory = relationship("Inventory", back_populates="user")
     transactions = relationship("Transaction", back_populates="user")
     leaderboard = relationship("Leaderboard", back_populates="user")
+    marketplace_listings = relationship("PetMarketplace", back_populates="seller")
+    sales_as_seller = relationship("PetSalesHistory", foreign_keys="PetSalesHistory.seller_id", back_populates="seller")
+    purchases = relationship("PetSalesHistory", foreign_keys="PetSalesHistory.buyer_id", back_populates="buyer")
 
 class Pet(Base):
     __tablename__ = "pets"
@@ -48,6 +51,8 @@ class Pet(Base):
     offspring_parent1 = relationship("Offspring", foreign_keys="Offspring.parent1_id", back_populates="parent1")
     offspring_parent2 = relationship("Offspring", foreign_keys="Offspring.parent2_id", back_populates="parent2")
     offspring_child = relationship("Offspring", foreign_keys="Offspring.child_id", back_populates="child")
+    marketplace_listing = relationship("PetMarketplace", back_populates="pet", uselist=False)
+    sales_history = relationship("PetSalesHistory", back_populates="pet")
 
 class Inventory(Base):
     __tablename__ = "inventory"
@@ -126,7 +131,7 @@ class Allele(Base):
 class PetGenetics(Base):
     __tablename__ = "pet_genetics"
     id = Column(Integer, primary_key=True, index=True)
-    pet_id = Column(Integer, ForeignKey("pets.id"), unique=True)
+    pet_id = Column(Integer, ForeignKey("pets.id"))
     gene_id = Column(Integer, ForeignKey("genes.id"))
     allele1_id = Column(Integer, ForeignKey("alleles.id"))
     allele2_id = Column(Integer, ForeignKey("alleles.id"))
@@ -162,8 +167,8 @@ class PetMarketplace(Base):
     asking_price = Column(Integer)
     listed_date = Column(DateTime, default=datetime.datetime.utcnow)
 
-    pet = relationship("Pet")
-    seller = relationship("User")
+    pet = relationship("Pet", back_populates="marketplace_listing")
+    seller = relationship("User", back_populates="marketplace_listings")
 
 class PetSalesHistory(Base):
     __tablename__ = "pet_sales_history"
@@ -174,6 +179,6 @@ class PetSalesHistory(Base):
     sale_price = Column(Integer)
     sale_date = Column(DateTime, default=datetime.datetime.utcnow)
 
-    pet = relationship("Pet")
-    seller = relationship("User", foreign_keys=[seller_id])
-    buyer = relationship("User", foreign_keys=[buyer_id])
+    pet = relationship("Pet", back_populates="sales_history")
+    seller = relationship("User", foreign_keys=[seller_id], back_populates="sales_as_seller")
+    buyer = relationship("User", foreign_keys=[buyer_id], back_populates="purchases")
