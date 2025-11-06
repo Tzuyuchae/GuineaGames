@@ -4,6 +4,7 @@ import os
 from maze import Maze
 from player import Player
 from settings import *
+from maze_generator import MazeGenerator
 
 # Path to assets 
 base_path = os.path.dirname(__file__)
@@ -15,29 +16,26 @@ class Game:
         pygame.mixer.init()
 
         # Maze layout: 0 = path, 1 = wall, P = player, E = exit
-        self.maze_layout = [
-            "1111111111",
-            "1P000000E1",
-            "1011111101",
-            "1010000101",
-            "1010110101",
-            "1000100001",
-            "1111111111"
-        ]
+        generator = MazeGenerator(21, 15)  # odd numbers work best
+        self.maze_layout = generator.generate()
 
-        # Find player start position
+        # Find a place for the player
         for y, row in enumerate(self.maze_layout):
             for x, tile in enumerate(row):
-                if tile == 'P':
-                    self.player_start = Player(x, y)
+                if tile == "0":
+                    self.player = Player(x, y)
+                    break
+            else:
+                continue
+            break
 
-        # Create maze
         self.maze = Maze(self.maze_layout)
         self.screen = pygame.display.set_mode((self.maze.width, self.maze.height))
-        pygame.display.set_caption("Maze Game")
+        pygame.display.set_caption("Procedural Maze")
 
         self.clock = pygame.time.Clock()
         self.running = True
+
     def handle_input(self):
         """Handle user input for player movement."""
         keys = pygame.key.get_pressed()
