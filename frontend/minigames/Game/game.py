@@ -5,6 +5,7 @@ from maze import Maze
 from player import Player
 from settings import *
 from maze_generator import MazeGenerator
+from enemy import Enemy
 
 # Path to assets 
 base_path = os.path.dirname(__file__)
@@ -20,17 +21,10 @@ class Game:
         # Generate maze using MazeGenerator
         generator = MazeGenerator(fruit_chance=0.1, seed=42)
         self.PACMAN_MAZE = generator.generate()
-
-
-        # Find a place for the player
-        for y, row in enumerate(self.PACMAN_MAZE):
-            for x, tile in enumerate(row):
-                if tile == "0":
-                    self.player_start = Player(x, y)
-                    break
-            else:
-                continue
-            break
+        
+        # Initialize player
+        self.player = Player()
+        self.player.player_spawn(Maze(self.PACMAN_MAZE))
 
         self.maze = Maze(self.PACMAN_MAZE)
         self.screen = pygame.display.set_mode((self.maze.width, self.maze.height))
@@ -43,18 +37,18 @@ class Game:
         """Handle user input for player movement."""
         keys = pygame.key.get_pressed()
         if keys[pygame.K_UP] or keys[pygame.K_w]:
-            self.player_start.move(0, -1, self.maze)
+            self.player.move(0, -1, self.maze)
         elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
-            self.player_start.move(0, 1, self.maze)
+            self.player.move(0, 1, self.maze)
         elif keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            self.player_start.move(-1, 0, self.maze)
+            self.player.move(-1, 0, self.maze)
         elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            self.player_start.move(1, 0, self.maze)
+            self.player.move(1, 0, self.maze)
 
     def check_win(self):
         """Check if the player has reached the exit."""
         # Ensure we don't index out of bounds; the maze layout should be consistent.
-        if self.PACMAN_MAZE[self.player_start.pos_y][self.player_start.pos_x] == 'E':
+        if self.PACMAN_MAZE[self.player.pos_y][self.player.pos_x] == 'E':
             print("You Win!")
             self.running = False
 
@@ -76,7 +70,7 @@ class Game:
 
             self.screen.fill(BLACK)
             self.maze.draw(self.screen)
-            self.player_start.draw(self.screen)
+            self.player.draw(self.screen)
 
             pygame.display.flip()
             self.clock.tick(FPS)
