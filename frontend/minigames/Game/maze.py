@@ -1,5 +1,5 @@
 import pygame 
-from settings import TILE_SIZE,BLUE, GREEN
+from settings import TILE_SIZE,BLUE, GREEN, GOLD
 
 class Maze: 
     def __init__(self, layout):
@@ -16,11 +16,13 @@ class Maze:
                 rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
                 if tile == "1":
                     pygame.draw.rect(screen, BLUE, rect)
-                elif tile == "E":
+                elif tile == "2":
                     pygame.draw.rect(screen, GREEN, rect)
+                elif tile == "E":
+                    pygame.draw.rect(screen, GOLD, rect)  # Gold color for exit
 
     def is_wall(self, x, y): 
         """Checks if the tile is walkable or not (not a wall)"""
         if 0 <= y < self.rows and 0 <= x < self.cols:
-            return self.layout[y][x] != "1"
+            return self.layout[y][x] != "1" or self.layout[y][x] != "2"
         return False
