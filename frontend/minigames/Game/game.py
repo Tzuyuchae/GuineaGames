@@ -58,10 +58,18 @@ class Game:
         """Handle loop points in the maze."""
         max_x = self.maze.cols - 1
         max_y = self.maze.rows - 1
+
+        # Check horizontal loops
         if self.maze.is_loop(max_x, self.player.pos_y, self.PACMAN_MAZE) and self.player.pos_x == max_x:
             self.player.pos_x = 0
         elif self.maze.is_loop(0, self.player.pos_y, self.PACMAN_MAZE) and self.player.pos_x == 0:
             self.player.pos_x = max_x
+
+        # Check vertical loops
+        if self.maze.is_loop(self.player.pos_x, max_y, self.PACMAN_MAZE) and self.player.pos_y == max_y:
+            self.player.pos_y = 0
+        elif self.maze.is_loop(self.player.pos_x, 0, self.PACMAN_MAZE) and self.player.pos_y == 0:
+            self.player.pos_y = max_y
             
 
     def check_lose(self):
