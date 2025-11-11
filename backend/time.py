@@ -1,6 +1,9 @@
 # Add to the main game file later
 import pygame 
 
+# This logic will probably need to be literally copied into the main doc
+# once its up and functional
+
 ###################################################################
 
 pygame.init()
@@ -13,7 +16,7 @@ font = pygame.font.SysFont('Consolas', 30)
 
 def inc_month(self, listAllGuineaPigs):
     
-    # THIS WILL LIKELY NEED TO BE MODIFIED # # # # # # # # # # # # # # # # # # # # # 
+    # THIS WILL LIKELY NEED TO BE MODIFIED #  #  #  #  #  #  #  #  #  #  #  #  #  #  #   
     for gp in listAllGuineaPigs:
         gp.hunger -= 1
 
@@ -26,12 +29,16 @@ timePassed = 0
 # should probably try and make a button for FPS
 # in a settigs tab at some point, or could just leave as 30fps
 FPS = 30
+# This variable name will probably be different in Main
+gamePaused = False
 
 run = True
 while run:
-    clock.tick(FPS)
+    if gamePaused == False:
+        clock.tick(FPS)
     for e in pygame.event.get():
-        if timePassed == 300000:
+        timePassed += 1
+        if timePassed == 300000:        #300k ms is ~5 minutes
             timePassed = 0
             inc_month()
         if e.type == pygame.USEREVENT:
@@ -54,11 +61,4 @@ while mainloop: # mainloop
     if seconds>10: # if more than 10 seconds close the game
         break
     print (seconds) #print how many seconds
-
-#################################################################
-# Both of these will be changed later to match other code
-playingMiniGame = None
-activeGuineaPigs = []
-
-
 
