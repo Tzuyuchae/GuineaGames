@@ -14,6 +14,12 @@ counter, text = 10, '10'.rjust(3)
 pygame.time.set_timer(pygame.USEREVENT, 1000)
 font = pygame.font.SysFont('Consolas', 30)
 
+def getPlayerPigs(self):
+    
+
+    return 
+
+
 def inc_month(self, listAllGuineaPigs):
     
     # THIS WILL LIKELY NEED TO BE MODIFIED #  #  #  #  #  #  #  #  #  #  #  #  #  #  #   
