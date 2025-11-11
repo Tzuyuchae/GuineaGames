@@ -1,5 +1,5 @@
 # Add to the main game file later
-import pygame
+import pygame 
 
 ###################################################################
 
@@ -11,14 +11,34 @@ counter, text = 10, '10'.rjust(3)
 pygame.time.set_timer(pygame.USEREVENT, 1000)
 font = pygame.font.SysFont('Consolas', 30)
 
+def inc_month(self, listAllGuineaPigs):
+    
+    # THIS WILL LIKELY NEED TO BE MODIFIED # # # # # # # # # # # # # # # # # # # # # 
+    for gp in listAllGuineaPigs:
+        gp.hunger -= 1
+
+def quitGame(self):
+
+    return False     #run = False
+
+
+timePassed = 0
+# should probably try and make a button for FPS
+# in a settigs tab at some point, or could just leave as 30fps
+FPS = 30
+
 run = True
 while run:
+    clock.tick(FPS)
     for e in pygame.event.get():
-        if e.type == pygame.USEREVENT: 
+        if timePassed == 300000:
+            timePassed = 0
+            inc_month()
+        if e.type == pygame.USEREVENT:
             counter -= 1
             text = str(counter).rjust(3) if counter > 0 else 'boom!'
-        if e.type == pygame.QUIT: 
-            run = False
+        if e.type == pygame.QUIT:
+            run = quitGame()
 
     screen.fill((255, 255, 255))
     screen.blit(font.render(text, True, (0, 0, 0)), (32, 48))
@@ -27,6 +47,7 @@ while run:
 
 ##################################################################
 
+mainloop = True
 start_ticks=pygame.time.get_ticks() #starter tick
 while mainloop: # mainloop
     seconds=(pygame.time.get_ticks()-start_ticks)/1000 #calculate how many seconds
@@ -39,36 +60,5 @@ while mainloop: # mainloop
 playingMiniGame = None
 activeGuineaPigs = []
 
-# should probably try and make a button about this 
-# in a settigs tab at some point, or could just leave as 30fps
-userSetFPS = 30
-FPS = userSetFPS
-newAging = 0
 
 
-def timers (self, guineapig, time):
-    None
-
-
-
-running = True
-while running:
-    if playingMiniGame == False:
-        clock.tick(FPS)
-        newAging += 1
-    
-    if (newAging // 300) == 1:
-
-        
-
-
-
-        
-#converts to minutes
-newAgingMinutes = newAging / 60
-
-#converts to months
-newAgingMonths = newAgingMinutes / 5
-
-for pig in activeGuineaPigs:
-    pig.age += newAgingMonths
