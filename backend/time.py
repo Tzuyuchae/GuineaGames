@@ -6,6 +6,9 @@ import pygame
 
 ###################################################################
 
+# create list of gpigs
+# fix aging functionality
+
 pygame.init()
 screen = pygame.display.set_mode((128, 128))
 clock = pygame.time.Clock()
@@ -15,14 +18,17 @@ pygame.time.set_timer(pygame.USEREVENT, 1000)
 font = pygame.font.SysFont('Consolas', 30)
 
 def getPlayerPigs(self):
+    dict = {}
+
+
+
     
 
-    return 
-
+    return dict
 
 def inc_month(self, listAllGuineaPigs):
     
-    # THIS WILL LIKELY NEED TO BE MODIFIED #  #  #  #  #  #  #  #  #  #  #  #  #  #  #   
+    # THIS WILL LIKELY NEED TO BE MODIFIED #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  
     for gp in listAllGuineaPigs:
         gp.hunger -= 1
 
@@ -37,6 +43,8 @@ timePassed = 0
 FPS = 30
 # This variable name will probably be different in Main
 gamePaused = False
+
+playerPigs = getPlayerPigs()
 
 run = True
 while run:
