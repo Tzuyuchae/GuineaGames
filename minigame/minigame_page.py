@@ -1,64 +1,61 @@
 import pygame
-from button import Button
+
 from minigame.guinea_pig_selector import GuineaPigSelector
 from minigame.game import Game
 
-# State management for minigame flow
-minigame_state = 'selector'  # Can be 'selector' or 'playing'
-guinea_pig_selector = None
-game_instance = None
-selected_guinea_pig = None
+class MinigamePage:
+    """Encapsulates state and logic for the minigame page."""
+    def __init__(self, user_id=1):
+        self.state = 'selector'  # Can be 'selector' or 'playing'
+        self.guinea_pig_selector = None
+        self.game_instance = None
+        self.selected_guinea_pig = None
+        self.user_id = user_id
 
-def initialize_selector():
-    """Initialize the guinea pig selector."""
-    global guinea_pig_selector
-    guinea_pig_selector = GuineaPigSelector(user_id=1)
+    def initialize_selector(self):
+        """Initialize the guinea pig selector."""
+        self.guinea_pig_selector = GuineaPigSelector(user_id=self.user_id)
 
-def minigame_update(events):
-    """Handles events for the minigame page."""
-    global minigame_state, game_instance, selected_guinea_pig, guinea_pig_selector
-    
-    # Initialize selector on first run
-    if guinea_pig_selector is None:
-        initialize_selector()
-    
-    if minigame_state == 'selector':
-        # Handle selector events
-        result = guinea_pig_selector.update(events)
-        
-        if result == 'back':
-            # Reset state when going back
-            minigame_state = 'selector'
-            game_instance = None
-            selected_guinea_pig = None
-            return 'homescreen'
-        
-        elif result and result[0] == 'start_game':
-            # User selected a guinea pig and clicked start
-            _, selected_guinea_pig = result
-            game_instance = Game(selected_guinea_pig=selected_guinea_pig)
-            minigame_state = 'playing'
-    
-    elif minigame_state == 'playing':
-        # Handle game events
-        if game_instance:
-            result = game_instance.update(events)
-            if result == 'homescreen':
-                # Game ended, reset state
-                minigame_state = 'selector'
-                game_instance = None
-                selected_guinea_pig = None
-                guinea_pig_selector = None  # Reinitialize next time
+    def update(self, events):
+        """Handles events for the minigame page."""
+        # Initialize selector on first run
+        if self.guinea_pig_selector is None:
+            self.initialize_selector()
+
+        if self.state == 'selector':
+            # Handle selector events
+            result = self.guinea_pig_selector.update(events)
+
+            if result == 'back':
+                # Reset state when going back
+                self.state = 'selector'
+                self.game_instance = None
+                self.selected_guinea_pig = None
                 return 'homescreen'
-    
-    return None  # Stay on this screen
 
-def minigame_draw(screen):
-    """Draws the minigame page."""
-    global minigame_state, game_instance, guinea_pig_selector
-    
-    if minigame_state == 'selector' and guinea_pig_selector:
-        guinea_pig_selector.draw(screen)
-    
-    elif minigame_state == 'playing' and game_instance:
-        game_instance.draw(screen)
+        elif isinstance(result, (tuple, list)) and len(result) > 0 and result[0] == 'start_game':
+                # User selected a guinea pig and clicked start
+                _, self.selected_guinea_pig = result
+                self.game_instance = Game(selected_guinea_pig=self.selected_guinea_pig)
+                self.state = 'playing'
+
+        elif self.state == 'playing':
+            # Handle game events
+            if self.game_instance:
+                result = self.game_instance.update(events)
+                if result == 'homescreen':
+                    # Game ended, reset state
+                    self.state = 'selector'
+                    self.game_instance = None
+                    self.selected_guinea_pig = None
+                    self.guinea_pig_selector = None  # Reinitialize next time
+                    return 'homescreen'
+
+        return None  # Stay on this screen
+
+    def draw(self, screen):
+        """Draws the minigame page."""
+        if self.state == 'selector' and self.guinea_pig_selector:
+            self.guinea_pig_selector.draw(screen)
+        elif self.state == 'playing' and self.game_instance:
+            self.game_instance.draw(screen)
