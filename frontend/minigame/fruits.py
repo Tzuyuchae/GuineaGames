@@ -1,3 +1,5 @@
+### File: minigame/fruits.py ###
+
 import pygame
 import random 
 import os
@@ -5,13 +7,17 @@ from minigame.settings import GREEN, TILE_SIZE
 
 # Defining path to fruit assets (if needed in future)
 base_path = os.path.dirname(__file__)
-assets_path = os.path.join(base_path, "../assets/images/")
+# --- This path isn't needed here, but correcting it for consistency ---
+image_path = os.path.join(base_path, "../images/")
 
 class Fruit:
     def __init__(self, fruit_chance=0.1, color=GREEN, seed=None):
         self.fruit_chance = fruit_chance
         self.color = color
         self.seed = seed
+        
+        # --- NO IMAGE LOADING NEEDED HERE ---
+        # (See the note below)
     
     def add_fruits(self, grid):
         """Randomly add fruits ('2') to the maze."""
@@ -22,6 +28,7 @@ class Fruit:
         for row in grid:
             new_row = ''
             for tile in row:
+                # Check if tile is path '0' and not player 'P'
                 if tile == '0' and random.random() < self.fruit_chance and tile != 'P':
                     new_row += '2'  # fruit
                 else:
@@ -47,9 +54,11 @@ class Fruit:
         return True
 
     def draw(self, screen, grid):
-        """Draw fruits on the given screen based on the grid layout."""
-        for y, row in enumerate(grid):
-            for x, tile in enumerate(row):
-                if tile == '2':  # fruit
-                    rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                    pygame.draw.rect(screen, self.color, rect)
+        """
+        This method is no longer needed.
+        The Maze.draw() method now handles drawing the fruit images.
+        """
+        # --- 1. REMOVE THE OLD DRAW CODE ---
+        # By doing nothing, we stop this class from
+        # drawing colored squares on top of your fruit art.
+        pass
