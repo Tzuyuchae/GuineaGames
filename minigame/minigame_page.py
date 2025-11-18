@@ -33,7 +33,7 @@ class MinigamePage:
                 self.selected_guinea_pig = None
                 return 'homescreen'
 
-        elif isinstance(result, (tuple, list)) and len(result) > 0 and result[0] == 'start_game':
+            elif isinstance(result, (tuple, list)) and len(result) > 0 and result[0] == 'start_game':
                 # User selected a guinea pig and clicked start
                 _, self.selected_guinea_pig = result
                 self.game_instance = Game(selected_guinea_pig=self.selected_guinea_pig)

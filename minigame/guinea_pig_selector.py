@@ -137,8 +137,8 @@ class GuineaPigSelector:
         for i, pet in enumerate(self.pets):
             y_pos = start_y + i * (button_height + spacing)
             button = Button(
-                start_x + button_width // 2,
-                y_pos + button_height // 2,
+                start_x,
+                y_pos,
                 button_width,
                 button_height,
                 pet['name'],

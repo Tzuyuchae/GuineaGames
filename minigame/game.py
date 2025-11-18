@@ -135,7 +135,7 @@ class Game:
             pygame.mixer.music.load(os.path.join(assets_path, filename))
             pygame.mixer.music.play(-1)
         except pygame.error as e:
-            print(f"Cannot load music: {filename} - {e}")
+
     
     def _draw_guinea_pig_hud(self, screen):
         """Draw HUD showing which guinea pig is playing."""

@@ -28,10 +28,13 @@ class GuineaPig:
         id (str): Unique identifier (UUID4 string).
     """
 
+    MIN_PIG_SCORE = 50
+    MAX_PIG_SCORE = 500
+
     def __init__(self, name: str, score: int = None):
         self.name = name
-        # If not provided, assign a randomized score between 50 and 500
-        self.score = score if score is not None else random.randint(50, 500)
+        # If not provided, assign a randomized score between MIN_PIG_SCORE and MAX_PIG_SCORE
+        self.score = score if score is not None else random.randint(self.MIN_PIG_SCORE, self.MAX_PIG_SCORE)
         self.id = str(uuid.uuid4())
 
     def __repr__(self):
