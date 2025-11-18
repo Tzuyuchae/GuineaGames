@@ -3,11 +3,44 @@ import random
 from minigame.settings import TILE_SIZE, RED
 
 class Player:
-    def __init__(self, x=0, y=0, color=RED, seed=None):
+    def __init__(self, x=0, y=0, color=RED, seed=None, guinea_pig_data=None):
+        """
+        Initialize the player.
+        
+        Args:
+            x: Starting x position
+            y: Starting y position
+            color: Player color (will be overridden if guinea_pig_data provided)
+            seed: Random seed for spawn position
+            guinea_pig_data: Dictionary containing guinea pig info (name, color, speed, etc.)
+        """
         self.pos_x = x
         self.pos_y = y
-        self.color = color
         self.seed = seed
+        self.guinea_pig_data = guinea_pig_data
+        
+        # Set color based on guinea pig data if provided
+        if guinea_pig_data and 'color' in guinea_pig_data:
+            self.color = self._get_color_from_name(guinea_pig_data['color'])
+        else:
+            self.color = color
+        
+        # Store guinea pig stats
+        self.name = guinea_pig_data.get('name', 'Player') if guinea_pig_data else 'Player'
+        self.speed_stat = guinea_pig_data.get('speed', 50) if guinea_pig_data else 50
+    
+    def _get_color_from_name(self, color_name):
+        """Convert color name to RGB tuple."""
+        color_map = {
+            'brown': (139, 69, 19),
+            'white': (255, 255, 255),
+            'orange': (255, 165, 0),
+            'black': (50, 50, 50),
+            'gray': (128, 128, 128),
+            'gold': (255, 215, 0),
+            'red': RED
+        }
+        return color_map.get(color_name.lower(), RED)
 
     def move(self, dx, dy, maze):
         """Move the player by (dx, dy) if the target position is not a wall."""
