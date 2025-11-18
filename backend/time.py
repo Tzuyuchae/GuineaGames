@@ -1,5 +1,10 @@
 # Add to the main game file later
+import sqlite3
 import pygame 
+
+sqliteConnection = sqlite3.connect("database.py")
+cursor = sqliteConnection.cursor()
+
 
 # This logic will probably need to be literally copied into the main doc
 # once its up and functional
@@ -17,11 +22,13 @@ counter, text = 10, '10'.rjust(3)
 pygame.time.set_timer(pygame.USEREVENT, 1000)
 font = pygame.font.SysFont('Consolas', 30)
 
-def getPlayerPigs(self):
+#id, owner_id,name,species,color,age_months,health,happiness,hunger,cleanliness, last_updated
+def getPlayerPigs(self): 
     dict = {}
-
-
-
+    cursor.execute("SELECT id, hunger FROM PETS")
+    rows = cursor.fetchall()
+    for item in rows:
+        dict[item[0]] = 
     
 
     return dict
@@ -65,6 +72,9 @@ while run:
     screen.blit(font.render(text, True, (0, 0, 0)), (32, 48))
     pygame.display.flip()
     clock.tick(60)
+
+sqliteConnection.commit()
+sqliteConnection.close()
 
 ##################################################################
 
