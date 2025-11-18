@@ -21,7 +21,7 @@ class Pet(Base):
     name = Column(String)
     species = Column(String)
     color = Column(String)
-    age_days = Column(Integer, default=0)
+    age_months = Column(Integer, default=0)
     health = Column(Integer, default=100)
     happiness = Column(Integer, default=100)
     hunger = Column(Integer, default=100)

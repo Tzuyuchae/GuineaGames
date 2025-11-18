@@ -78,11 +78,11 @@ CREATE TABLE PETS (
     name TEXT,
     species TEXT CHECK(species IN ('guinea_pig', 'hamster', 'predator')),
     color TEXT,
-    age_days INTEGER DEFAULT 0,
+    age_months INTEGER DEFAULT 0,
     health INTEGER CHECK(health BETWEEN 0 AND 100) DEFAULT 100,
-    happiness INTEGER CHECK(happiness BETWEEN 0 AND 100) DEFAULT 100,
+    speed INTEGER CHECK(happiness BETWEEN 0 AND 10) DEFAULT 4,
     hunger INTEGER CHECK(hunger BETWEEN 0 AND 3) DEFAULT 3,
-    cleanliness INTEGER CHECK(cleanliness BETWEEN 0 AND 100) DEFAULT 100,
+    endurance INTEGER CHECK(cleanliness BETWEEN 0 AND 100) DEFAULT 100,
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_id) REFERENCES USERS(id)
 );

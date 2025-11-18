@@ -13,9 +13,9 @@ class PetCreate(PetBase):
 class Pet(PetBase):
     id: int
     health: int
-    happiness: int
+    speed: int
     hunger: int
-    cleanliness: int
+    endurance: int
     last_updated: datetime.datetime
 
     class Config:
