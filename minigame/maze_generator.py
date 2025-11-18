@@ -4,7 +4,8 @@ import os
 
 # Define file path for maps for future use
 base_path = os.path.dirname(__file__)
-assets_path = os.path.join(base_path, "../assets/layouts/")
+#assets_path = os.path.join(base_path, "../assets/layouts/")
+assets_path = os.path.join(base_path, "./maze_layouts/")
 
 class MazeGenerator:
     """
@@ -13,7 +14,7 @@ class MazeGenerator:
     """
 
     def __init__(self, ascii_maze=None, fruit_chance=0.1, seed=None):
-        self.ascii_maze = ascii_maze or self.default_maze()
+        self.ascii_maze = ascii_maze or self.random_map_choice()
         self.fruit_chance = fruit_chance
         self.seed = seed
         self.mapping = {
@@ -63,6 +64,14 @@ _____|.||.||||||||.||.|_____
 """
 
     def random_map_choice(self):
+        # Read in maze files
+        maze_files = [f for f in os.listdir(assets_path) if f.endswith('.txt')]
+        if maze_files:
+            maze_file = random.choice(maze_files)
+            with open(os.path.join(assets_path, maze_file), 'r') as file:
+                return file.read()
+        else:
+            return self.default_maze()
         pass
     ### FIX ME ###
     # Given the file, we have to be able to randomly select a map from the assets/layouts folder
