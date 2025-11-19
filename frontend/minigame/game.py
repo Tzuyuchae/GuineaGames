@@ -25,6 +25,9 @@ from minigame.enemy import Enemy
 base_path = os.path.dirname(__file__)
 assets_path = os.path.join(base_path, "../assets/audio/")
 
+class Game:
+    def __init__(self):
+        pygame.mixer.init()
 
 class Game:
     # --- All indentation has been fixed ---
@@ -95,8 +98,10 @@ class Game:
         self.enemy.draw(screen)
         self.fruit.draw(screen, self.PACMAN_MAZE)
         self.button_back.draw(screen)
-
-    # --- (All other helper methods are unchanged) ---
+        
+        # Draw guinea pig name HUD if available
+        if self.selected_guinea_pig:
+            self._draw_guinea_pig_hud(screen)
 
     def handle_player_input(self):
         keys = pygame.key.get_pressed()
@@ -137,4 +142,28 @@ class Game:
             pygame.mixer.music.load(os.path.join(assets_path, filename))
             pygame.mixer.music.play(-1)
         except pygame.error as e:
-            print(f"Cannot load music: {filename} - {e}")
+            print(f"Music Error: {e}")
+
+    def _draw_guinea_pig_hud(self, screen):
+        """Draw HUD showing which guinea pig is playing."""
+        try:
+            hud_font = pygame.font.SysFont('Arial', 20, bold=True)
+        except:
+            hud_font = pygame.font.Font(None, 24)
+        
+        # Create text
+        name = self.selected_guinea_pig.get('name', 'Unknown')
+        text = hud_font.render(f"Playing as: {name}", True, GOLD)
+        
+        # Position at top center
+        text_rect = text.get_rect()
+        text_rect.centerx = self.maze.width // 2
+        text_rect.top = 10
+        
+        # Draw background
+        bg_rect = text_rect.inflate(20, 10)
+        pygame.draw.rect(screen, BLACK, bg_rect, border_radius=5)
+        pygame.draw.rect(screen, GOLD, bg_rect, 2, border_radius=5)
+        
+        # Draw text
+        screen.blit(text, text_rect)
