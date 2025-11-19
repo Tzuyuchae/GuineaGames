@@ -1,5 +1,5 @@
 import pygame
-from button import Button # <-- Import the new Button class
+from frontend.minigame.button import Button # <-- Import the new Button class
 
 # Create the buttons
 # (x, y, width, height, text)

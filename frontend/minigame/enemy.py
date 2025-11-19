@@ -1,21 +1,34 @@
-### FIX ME ###
-    # We need to implement an enemy that chases the player around the maze
-    # and causes the player to lose if they come into contact with it.
+### File: minigame/enemy.py ###
+
 import pygame 
 import random
 import os
 from minigame.settings import TILE_SIZE, GOLD
-from minigame.maze_generator import MazeGenerator
+from minigame.maze_generator import MazeGenerator # This import seems unused, but fine
 
-# Define path to enemy assets (if needed in future)
+# --- 1. UPDATE THIS PATH ---
+# This path should point to 'frontend/images/'
 base_path = os.path.dirname(__file__)
-assets_path = os.path.join(base_path, "../assets/images/")
+image_path = os.path.join(base_path, "../images/") # Corrected path
 
 class Enemy:
     def __init__(self, pos_x=0, pos_y=0, color=GOLD, seed=None):
         self.position = [pos_x, pos_y]
-        self.color = color
+        self.color = color 
         self.seed = seed
+        
+        # --- 2. ADD THIS BLOCK to load the image ---
+        try:
+            # Load your enemy image from 'frontend/images/enemy.png'
+            self.image = pygame.image.load(os.path.join(image_path, "enemy.png")).convert_alpha()
+            # Scale it to fit the tile
+            self.image = pygame.transform.scale(self.image, (TILE_SIZE, TILE_SIZE))
+        except FileNotFoundError:
+            # Fallback if image is missing
+            print("Warning: 'enemy.png' not found. Using fallback color.")
+            self.image = pygame.Surface((TILE_SIZE, TILE_SIZE))
+            self.image.fill(self.color)
+        # --- END OF ADDED BLOCK ---
     
     def move_towards_player(self, player_pos, maze):
         """Move the enemy one step towards the player if possible."""
@@ -55,7 +68,12 @@ class Enemy:
         return (self.position[0], self.position[1])
 
     def draw(self, screen):
-        """Draw the enemy on the given screen."""
+        """Draw the enemy's image on the given screen."""
+        
+        # --- 3. REPLACE THE OLD DRAW CODE WITH THIS ---
+        
+        # Calculate the screen position
         rect = pygame.Rect(self.position[0] * TILE_SIZE, self.position[1] * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-        pygame.draw.rect(screen, self.color, rect)
-    
+        
+        # Draw the loaded image onto the screen
+        screen.blit(self.image, rect)

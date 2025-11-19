@@ -2,80 +2,94 @@ import pygame
 import sys
 import os
 
-# --- Imports for the GAME class ---
-from button import Button
-from maze import Maze
-from player import Player
+# --- Fix for Imports ---
+# Add the parent directory (which is 'frontend/') to the Python path
+
+
+# --- Imports (FIXED) ---
+# Now that 'frontend' is on the path, we can import these directly.
+from .button import Button
+from .maze import Maze
+from .player import Player
+from .fruits import Fruit
+
+# --- MINIGAME Imports (FIXED) ---
+# Since 'frontend' is on the path, we import these from 'minigame'
+# DO NOT use relative dots ('.') here.
 from minigame.settings import *
 from minigame.maze_generator import MazeGenerator
 from minigame.enemy import Enemy
-from fruits import Fruit
 
-# Path to assets 
+
+# Path to assets (this path is correct)
 base_path = os.path.dirname(__file__)
 assets_path = os.path.join(base_path, "../assets/audio/")
 
 
-class Game: 
-    def __init__(self): 
-        pygame.mixer.init() 
+class Game:
+    # --- All indentation has been fixed ---
+    def __init__(self):
+        pygame.mixer.init()
 
         generator = MazeGenerator(fruit_chance=0.1, seed=42)
         self.PACMAN_MAZE = generator.generate()
-        
+
         self.player = Player(seed=42)
         self.PACMAN_MAZE = self.player.add_player(self.PACMAN_MAZE)
 
         self.enemy = Enemy(seed=42)
         self.PACMAN_MAZE = self.enemy.add_enemies(self.PACMAN_MAZE)
-        
+
         self.fruit = Fruit(fruit_chance=0.1, seed=42)
         self.PACMAN_MAZE = self.fruit.add_fruits(self.PACMAN_MAZE)
 
         self.maze = Maze(self.PACMAN_MAZE)
-        
-        self.running = True 
-        
+
+        self.running = True
+
         # --- 'Back' button for the GAME ---
         button_w = 200
         button_h = 70
         button_x = (self.maze.width - button_w) // 2
-        button_y = self.maze.height - button_h - 10 
-        self.button_back = Button(button_x, button_y, button_w, button_h, 
-                                  'BACK', (150, 150, 0), (200, 200, 0))
-        
+        button_y = self.maze.height - button_h - 10
+        self.button_back = Button(button_x, button_y, button_w, button_h,
+                                    'BACK', (150, 150, 0), (200, 200, 0))
+
         self.play_music("music.wav")
 
     def update(self, events):
         """Handles all game logic for one frame."""
         mouse_pos = pygame.mouse.get_pos()
-        
+
         for event in events:
             if self.button_back.check_click(event):
                 print("Back button clicked! Returning to homescreen.")
-                self.running = False 
-        
+                self.running = False
+
         self.button_back.check_hover(mouse_pos)
 
-        self.handle_player_input()
-        self.check_lose()
-        self.check_win()
-        self.handle_loops()
-        
-        self.PACMAN_MAZE = self.fruit.if_collected(
-            (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
-        )
+        # Only update game logic if running
+        if self.running:
+            self.handle_player_input()
+            self.check_lose()
+            self.check_win()
+            self.handle_loops()
 
+            self.PACMAN_MAZE = self.fruit.if_collected(
+                (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
+            )
+
+        # If running is set to False (by button or game end), stop music and return
         if not self.running:
-            pygame.mixer.music.stop() 
-            return 'homescreen' 
-        
-        return None
+            pygame.mixer.music.stop()
+            return 'homescreen'
+
+        return None  # Stay on this screen
 
     def draw(self, screen):
         """Draws the game state onto the provided screen."""
-        screen.fill(BLACK) 
-        
+        screen.fill(BLACK)
+
         self.maze.draw(screen)
         self.player.draw(screen)
         self.enemy.draw(screen)
@@ -102,11 +116,12 @@ class Game:
             self.player.pos_x = 0
         elif self.maze.is_loop(0, self.player.pos_y, self.PACMAN_MAZE) and self.player.pos_x == 0:
             self.player.pos_x = max_x
+
         if self.maze.is_loop(self.player.pos_x, max_y, self.PACMAN_MAZE) and self.player.pos_y == max_y:
             self.player.pos_y = 0
         elif self.maze.is_loop(self.player.pos_x, 0, self.PACMAN_MAZE) and self.player.pos_y == 0:
             self.player.pos_y = max_y
-            
+
     def check_lose(self):
         if self.player.player_pos() == self.enemy.enemy_pos():
             print("You Lose!")

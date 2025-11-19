@@ -1,5 +1,5 @@
 import pygame
-from button import Button
+from frontend.minigame.button import Button
 
 # A 'Back' button
 button_back = Button(400, 500, 200, 70, 'BACK', (150, 150, 0), (200, 200, 0))
