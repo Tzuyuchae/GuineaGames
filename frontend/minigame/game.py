@@ -87,6 +87,10 @@ class Game:
         self.button_back.check_hover(mouse_pos)
 
         if self.running:
+            # --- FIX: Update Enemy Movement ---
+            # This line was missing!
+            self.enemy.move_towards_player(self.player.player_pos(), self.maze)
+            
             # Check game states
             self.check_lose()
             self.check_win()
