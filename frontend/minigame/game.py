@@ -45,12 +45,12 @@ class Game:
         self.maze = Maze(self.PACMAN_MAZE)
 
         # 6. Setup 'Back' Button
-        button_w = 200
-        button_h = 70
-        button_x = (self.maze.width - button_w) // 2
-        button_y = self.maze.height - button_h - 10
-        self.button_back = Button(button_x, button_y, button_w, button_h,
-                                  'BACK', (150, 150, 0), (200, 200, 0))
+        # button_w = 200
+        # button_h = 70
+        # button_x = (self.maze.width - button_w) // 2
+        # button_y = self.maze.height - button_h - 10
+        # self.button_back = Button(button_x, button_y, button_w, button_h,
+        #                           'BACK', (150, 150, 0), (200, 200, 0))
 
         # 7. Start Music
         self.play_music("music.wav")
@@ -67,18 +67,6 @@ class Game:
         """Handles all game logic for one frame."""
         mouse_pos = pygame.mouse.get_pos()
 
-        for event in events:
-            # 1. Handle Button Click
-            if self.button_back.check_click(event):
-                print("Back button clicked! Returning to homescreen.")
-                self.running = False
-
-            # --- DELETE THE OLD KEYDOWN / PLAYER MOVE CODE HERE ---
-            # We don't use event.type == KEYDOWN anymore because
-            # momentum requires holding the key down.
-
-        self.button_back.check_hover(mouse_pos)
-
         if self.running:
             # --- ADD THIS NEW LINE ---
             # This checks for held keys and calculates momentum every frame
@@ -91,6 +79,7 @@ class Game:
             # Check game states
             self.check_lose()
             self.check_win()
+            self.check_exit()
 
             # Check fruit collision
             self.PACMAN_MAZE = self.fruit.if_collected(
@@ -106,7 +95,6 @@ class Game:
         self.player.draw(screen)
         self.enemy.draw(screen)
         self.fruit.draw(screen, self.PACMAN_MAZE)
-        self.button_back.draw(screen)
 
         # Draw guinea pig name HUD if available
         if self.selected_guinea_pig:
@@ -122,6 +110,13 @@ class Game:
         """Check if all fruits are collected."""
         if self.fruit.all_fruits_collected(self.PACMAN_MAZE):
             print("You Win!")
+            self.running = False
+
+    def check_exit(self):
+        """Check if the player is at the edge of the map to exit."""
+        if (self.player.pos_x == 0 or self.player.pos_x == self.maze.cols - 1 or
+            self.player.pos_y == 0 or self.player.pos_y == self.maze.rows - 1):
+            print("Exited the maze!")
             self.running = False
 
     def _draw_guinea_pig_hud(self, screen):
