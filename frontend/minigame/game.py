@@ -19,9 +19,6 @@ class Game:
     def __init__(self, selected_guinea_pig=None): 
         """
         Initialize the game.
-        
-        Args:
-            selected_guinea_pig: Dictionary containing selected guinea pig data
         """
         pygame.mixer.init() 
 
@@ -33,22 +30,41 @@ class Game:
         self.PACMAN_MAZE = generator.generate()
 
         # 2. Create player with guinea pig data
-        # We pass the selected data so the player gets the right color/speed
         self.player = Player(seed=42, guinea_pig_data=selected_guinea_pig)
         self.PACMAN_MAZE = self.player.add_player(self.PACMAN_MAZE)
 
         # 3. Create Enemies
         self.enemy = Enemy(seed=42)
-        self.PACMAN_MAZE = self.enemy.add_enemies(self.PACMAN_MAZE)
+        # Ensure we handle potential errors if add_enemies fails
+        try:
+            self.PACMAN_MAZE = self.enemy.add_enemies(self.PACMAN_MAZE)
+        except Exception as e:
+            print(f"Warning: Enemy generation failed: {e}")
 
         # 4. Create Fruits
         self.fruit = Fruit(fruit_chance=0.1, seed=42)
-        self.PACMAN_MAZE = self.fruit.add_fruits(self.PACMAN_MAZE)
+        try:
+            self.PACMAN_MAZE = self.fruit.add_fruits(self.PACMAN_MAZE)
+        except Exception as e:
+            print(f"Warning: Fruit generation failed: {e}")
 
         # 5. Initialize Maze Render Object
         self.maze = Maze(self.PACMAN_MAZE)
+        # 6. Setup 'Back' Button (CRITICAL STEP)
+        # We verify the maze dimensions first
+        if hasattr(self.maze, 'width') and hasattr(self.maze, 'height'):
+            button_w = 200
+            button_h = 70
+            button_x = (self.maze.width - button_w) // 2
+            button_y = self.maze.height - button_h - 10
+        else:
+            # Fallback if maze didn't load correctly
+            button_x, button_y, button_w, button_h = 100, 500, 200, 70
+            
+        self.button_back = Button(button_x, button_y, button_w, button_h,
+                                  'BACK', (150, 150, 0), (200, 200, 0))
 
-        # 6. Start Music
+        # 7. Start Music
         self.play_music("music.wav")
 
     def play_music(self, filename):
@@ -65,11 +81,13 @@ class Game:
 
         for event in events:
             # 1. Handle Button Click
-            if self.button_back.check_click(event):
+            # This check will now only run if button_back exists
+            if hasattr(self, 'button_back') and self.button_back.check_click(event):
                 print("Back button clicked! Returning to homescreen.")
                 self.running = False
 
-        self.button_back.check_hover(mouse_pos)
+        if hasattr(self, 'button_back'):
+            self.button_back.check_hover(mouse_pos)
 
         if self.running:
             # Handle continuous input (momentum/movement)
@@ -87,6 +105,12 @@ class Game:
             self.PACMAN_MAZE = self.fruit.if_collected(
                 (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
             )
+    def check_exit(self):
+        """Check if the player is at the edge of the map to exit."""
+        if (self.player.pos_x == 0 or self.player.pos_x == self.maze.cols - 1 or
+            self.player.pos_y == 0 or self.player.pos_y == self.maze.rows - 1):
+            print("Exited the maze!")
+            self.running = False
 
     def draw(self, screen):
         """Draws the game state onto the screen."""
@@ -96,6 +120,9 @@ class Game:
         self.player.draw(screen)
         self.enemy.draw(screen)
         self.fruit.draw(screen, self.PACMAN_MAZE)
+        
+        if hasattr(self, 'button_back'):
+            self.button_back.draw(screen)
 
         # Draw guinea pig name HUD if available
         if self.selected_guinea_pig:
@@ -111,13 +138,6 @@ class Game:
         """Check if all fruits are collected."""
         if self.fruit.all_fruits_collected(self.PACMAN_MAZE):
             print("You Win!")
-            self.running = False
-
-    def check_exit(self):
-        """Check if the player is at the edge of the map to exit."""
-        if (self.player.pos_x == 0 or self.player.pos_x == self.maze.cols - 1 or
-            self.player.pos_y == 0 or self.player.pos_y == self.maze.rows - 1):
-            print("Exited the maze!")
             self.running = False
 
     def _draw_guinea_pig_hud(self, screen):

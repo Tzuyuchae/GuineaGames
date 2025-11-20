@@ -1,123 +1,93 @@
-import pygame 
+import pygame
 import random
 import os
-from minigame.settings import TILE_SIZE, GOLD
+from minigame.settings import TILE_SIZE, BLUE
 
 class Enemy:
-    def __init__(self, pos_x=0, pos_y=0, color=GOLD, seed=None):
-        self.position = [pos_x, pos_y]
-        self.color = color 
+    def __init__(self, seed=None):
+        """Initialize the enemy."""
+        self.pos_x = 0
+        self.pos_y = 0
         self.seed = seed
+        self.color = BLUE
         
-        # --- MOVEMENT TIMER ---
-        self.last_move_time = 0
-        self.move_delay = 400  # Time in milliseconds (0.4 seconds) between moves
-
-        # --- IMAGE LOADING ---
+        # Load Image
         base_path = os.path.dirname(os.path.abspath(__file__))
+        # Adjust path to wherever your assets are. 
+        # If this fails, it falls back to a blue square.
         image_path = os.path.join(base_path, "../../frontend/images/enemy.png")
-
+        
         try:
-            raw_img = pygame.image.load(image_path).convert_alpha()
-            self.image = pygame.transform.scale(raw_img, (TILE_SIZE, TILE_SIZE))
+            raw_image = pygame.image.load(image_path).convert_alpha()
+            self.image = pygame.transform.scale(raw_image, (TILE_SIZE, TILE_SIZE))
         except (FileNotFoundError, pygame.error):
-            print(f"Warning: Enemy image not found at {image_path}. Using fallback.")
             self.image = pygame.Surface((TILE_SIZE, TILE_SIZE))
             self.image.fill(self.color)
-    
-    def move_towards_player(self, player_pos, maze):
-        """
-        Move the enemy one step towards the player.
-        Includes a timer check to control speed.
-        """
-        # 1. Check Timer (Don't move too fast)
-        now = pygame.time.get_ticks()
-        if now - self.last_move_time < self.move_delay:
-            return 
+            
+        self.rect = self.image.get_rect()
         
-        self.last_move_time = now
-
-        ex, ey = self.position
-        px, py = player_pos
-        
-        # 2. Determine direction
-        # We prefer to move along the axis with the biggest distance
-        dx = px - ex
-        dy = py - ey
-        
-        moved = False
-
-        # Try moving horizontally first if distance X is bigger
-        if abs(dx) >= abs(dy):
-            if dx > 0 and not maze.is_wall(ex + 1, ey):
-                self.position[0] += 1
-                moved = True
-            elif dx < 0 and not maze.is_wall(ex - 1, ey):
-                self.position[0] -= 1
-                moved = True
-            # If horizontal failed (wall), try vertical
-            if not moved:
-                if dy > 0 and not maze.is_wall(ex, ey + 1):
-                    self.position[1] += 1
-                    moved = True
-                elif dy < 0 and not maze.is_wall(ex, ey - 1):
-                    self.position[1] -= 1
-                    moved = True
-        
-        # Try moving vertically first
-        else:
-            if dy > 0 and not maze.is_wall(ex, ey + 1):
-                self.position[1] += 1
-                moved = True
-            elif dy < 0 and not maze.is_wall(ex, ey - 1):
-                self.position[1] -= 1
-                moved = True
-            # If vertical failed (wall), try horizontal
-            if not moved:
-                if dx > 0 and not maze.is_wall(ex + 1, ey):
-                    self.position[0] += 1
-                    moved = True
-                elif dx < 0 and not maze.is_wall(ex - 1, ey):
-                    self.position[0] -= 1
-                    moved = True
-
-        # If all movement failed, choose a random valid direction
-        if not moved:
-            directions = [(1,0), (-1,0), (0,1), (0,-1)]
-            random.shuffle(directions)
-            for x_change, y_change in directions:
-                if not maze.is_wall(ex + x_change, ey + y_change):
-                    self.position[0] += x_change
-                    self.position[1] += y_change
-                    moved = True
-                    break
+        # Movement timer (enemies move slower than game FPS)
+        self.move_timer = 0
+        self.move_delay = 20  # Move every 20 frames
 
     def add_enemies(self, grid):
-        """Randomly add enemies ('E') to the maze."""
+        """
+        Randomly places the enemy on an empty spot ('0').
+        CRITICAL: Must return the modified grid!
+        """
         if self.seed is not None:
-            random.seed(self.seed)
-        
+            random.seed(self.seed + 1) # Use different seed offset than player
+            
         spawn_points = []
         for y, row in enumerate(grid):
             for x, tile in enumerate(row):
-                if tile == '0': # Changed from 'S' to '0' to ensure valid spawns
+                if tile == '0':
                     spawn_points.append((x, y))
         
+        # Create a copy to modify
         new_grid = [list(row) for row in grid]
-        if spawn_points:
-            # Pick a random spawn that isn't too close to 0,0 (Player start)
-            valid_spawns = [p for p in spawn_points if p[0] > 5 and p[1] > 5]
-            if not valid_spawns: valid_spawns = spawn_points
-
-            enemy_x, enemy_y = random.choice(valid_spawns)
-            new_grid[enemy_y][enemy_x] = 'E'
-            self.position = [enemy_x, enemy_y]
         
+        if spawn_points:
+            ex, ey = random.choice(spawn_points)
+            new_grid[ey][ex] = 'E'
+            self.pos_x = ex
+            self.pos_y = ey
+            
+        # THIS RETURN STATEMENT WAS LIKELY MISSING
         return [''.join(row) for row in new_grid]
-    
+
+    def move_towards_player(self, player_pos, maze):
+        """Simple AI to move towards the player."""
+        self.move_timer += 1
+        if self.move_timer < self.move_delay:
+            return
+
+        self.move_timer = 0
+        px, py = player_pos
+        ex, ey = self.pos_x, self.pos_y
+        
+        # Simple logic: try to close the gap on X, then Y
+        potential_moves = []
+        
+        if ex < px: potential_moves.append((1, 0))  # Right
+        if ex > px: potential_moves.append((-1, 0)) # Left
+        if ey < py: potential_moves.append((0, 1))  # Down
+        if ey > py: potential_moves.append((0, -1)) # Up
+        
+        # Shuffle to make it less predictable if stuck
+        random.shuffle(potential_moves)
+        
+        for dx, dy in potential_moves:
+            if not maze.is_wall(ex + dx, ey + dy):
+                self.pos_x += dx
+                self.pos_y += dy
+                return # Moved successfully
+
     def enemy_pos(self):
-        return (self.position[0], self.position[1])
+        return (self.pos_x, self.pos_y)
 
     def draw(self, screen):
-        rect = pygame.Rect(self.position[0] * TILE_SIZE, self.position[1] * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-        screen.blit(self.image, rect)
+        pixel_x = self.pos_x * TILE_SIZE
+        pixel_y = self.pos_y * TILE_SIZE
+        self.rect.topleft = (pixel_x, pixel_y)
+        screen.blit(self.image, self.rect)
