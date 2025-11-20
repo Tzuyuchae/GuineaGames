@@ -59,8 +59,10 @@ class Enemy:
             if not moved:
                 if dy > 0 and not maze.is_wall(ex, ey + 1):
                     self.position[1] += 1
+                    moved = True
                 elif dy < 0 and not maze.is_wall(ex, ey - 1):
                     self.position[1] -= 1
+                    moved = True
         
         # Try moving vertically first
         else:
@@ -74,8 +76,21 @@ class Enemy:
             if not moved:
                 if dx > 0 and not maze.is_wall(ex + 1, ey):
                     self.position[0] += 1
+                    moved = True
                 elif dx < 0 and not maze.is_wall(ex - 1, ey):
                     self.position[0] -= 1
+                    moved = True
+
+        # If all movement failed, choose a random valid direction
+        if not moved:
+            directions = [(1,0), (-1,0), (0,1), (0,-1)]
+            random.shuffle(directions)
+            for x_change, y_change in directions:
+                if not maze.is_wall(ex + x_change, ey + y_change):
+                    self.position[0] += x_change
+                    self.position[1] += y_change
+                    moved = True
+                    break
 
     def add_enemies(self, grid):
         """Randomly add enemies ('E') to the maze."""
