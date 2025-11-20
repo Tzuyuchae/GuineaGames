@@ -73,22 +73,19 @@ class Game:
                 print("Back button clicked! Returning to homescreen.")
                 self.running = False
 
-            # 2. Handle Player Movement (Discrete Steps)
-            if self.running and event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP or event.key == pygame.K_w:
-                    self.player.move(0, -1, self.maze)
-                elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
-                    self.player.move(0, 1, self.maze)
-                elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
-                    self.player.move(-1, 0, self.maze)
-                elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
-                    self.player.move(1, 0, self.maze)
+            # --- DELETE THE OLD KEYDOWN / PLAYER MOVE CODE HERE ---
+            # We don't use event.type == KEYDOWN anymore because
+            # momentum requires holding the key down.
 
         self.button_back.check_hover(mouse_pos)
 
         if self.running:
-            # --- FIX: Update Enemy Movement ---
-            # This line was missing!
+            # --- ADD THIS NEW LINE ---
+            # This checks for held keys and calculates momentum every frame
+            self.player.handle_input(self.maze)
+            # -------------------------
+
+            # Move Enemy
             self.enemy.move_towards_player(self.player.player_pos(), self.maze)
             
             # Check game states
@@ -100,13 +97,7 @@ class Game:
                 (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
             )
 
-        # If game is over or user clicked back
-        if not self.running:
-            pygame.mixer.music.stop()
-            return 'homescreen'
-
-        return None
-
+            
     def draw(self, screen):
         """Draws the game state onto the screen."""
         screen.fill(BLACK)
