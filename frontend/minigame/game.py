@@ -44,15 +44,7 @@ class Game:
         # 5. Initialize Maze Render Object
         self.maze = Maze(self.PACMAN_MAZE)
 
-        # 6. Setup 'Back' Button
-        # button_w = 200
-        # button_h = 70
-        # button_x = (self.maze.width - button_w) // 2
-        # button_y = self.maze.height - button_h - 10
-        # self.button_back = Button(button_x, button_y, button_w, button_h,
-        #                           'BACK', (150, 150, 0), (200, 200, 0))
-
-        # 7. Start Music
+        # 6. Start Music
         self.play_music("music.wav")
 
     def play_music(self, filename):
