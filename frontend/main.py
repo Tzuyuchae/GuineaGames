@@ -4,18 +4,15 @@ import os
 import ctypes  # Needed for the screen resolution fix
 
 # --- 1. FIX WINDOWS SCALING (DPI AWARENESS) ---
-# This prevents the window from looking zoomed-in or cut off on Windows laptops
 try:
     ctypes.windll.user32.SetProcessDPIAware()
 except AttributeError:
     pass
 
 # --- 2. INITIALIZE PYGAME ---
-# This must happen BEFORE importing custom modules that use fonts/images
 pygame.init()
 
 # Setup Screen Dimensions
-# These match your standard UI layout (Portrait mode)
 screen_width = 672
 screen_height = 864
 screen = pygame.display.set_mode((screen_width, screen_height))
@@ -30,27 +27,26 @@ import store_page
 from store_module import PlayerInventory
 from minigame.minigame_page import MinigamePage
 
-# Note: These pages are placeholders until you create the files.
-# import details_page
-# import breeding
+# --- RE-ENABLED IMPORTS ---
+# Make sure breeding.py exists in your folder!
+import breeding 
+# import details_page # Keep this commented until you have the file
 
 # --- 4. INITIALIZE PAGES & DATA ---
 
-# Initialize Homescreen (loads assets)
+# Initialize Homescreen
 try:
     homescreen.homescreen_init()
 except AttributeError:
     pass
 
-# Initialize Store (loads fonts)
+# Initialize Store
 store_page.store_init()
 
-# Create Persistent Player Inventory
-# We create it here so coins/items are saved while switching screens
+# Initialize Inventory
 player_inventory = PlayerInventory(coins=500)
 
 # Initialize Minigame Manager
-# This handles the transition between the Pet Selector and the Maze
 minigame_manager = MinigamePage(user_id=1)
 
 # --- 5. MAIN GAME LOOP ---
@@ -70,7 +66,6 @@ while running:
     if currentmenu == 'title':
         new_state = title.title_update(events)
         title.title_draw(screen)
-        
         if new_state:
             currentmenu = new_state
 
@@ -87,39 +82,42 @@ while running:
             elif new_state == 'store':
                 currentmenu = 'store'
             
+            # --- RE-ENABLED BREEDING NAVIGATION ---
+            elif new_state == 'breeding':
+                currentmenu = 'breeding'
+
             elif new_state == 'details':
                 print("Details page coming soon.")
-                # currentmenu = 'details' # Uncomment when file exists
-                
-            elif new_state == 'breeding':
-                print("Breeding page coming soon.")
-                # currentmenu = 'breeding' # Uncomment when file exists
+                # currentmenu = 'details'
                 
             else:
                 currentmenu = new_state
 
     # --- STORE PAGE ---
     elif currentmenu == 'store':
-        # Update: We pass 'player_inventory' so the user can spend coins
         new_state = store_page.store_update(events, player_inventory)
-        
-        # Draw: We pass 'player_inventory' to show current coin balance
         store_page.store_draw(screen, player_inventory)
+        
+        if new_state == 'homescreen':
+            currentmenu = 'homescreen'
+
+    # --- BREEDING PAGE ---
+    elif currentmenu == 'breeding':
+        # Assuming breeding.py has breeding_update(events) and breeding_draw(screen)
+        new_state = breeding.breeding_update(events)
+        breeding.breeding_draw(screen)
         
         if new_state == 'homescreen':
             currentmenu = 'homescreen'
 
     # --- MINIGAME (Selector + Maze) ---
     elif currentmenu == 'minigame':
-        # Delegate logic to the Minigame Manager
         result = minigame_manager.update(events)
         minigame_manager.draw(screen)
         
-        # If the game ends or user clicks Back
         if result == 'homescreen':
             currentmenu = 'homescreen'
-            # FORCE RESET SCREEN SIZE
-            # The minigame might resize the window for the maze, so we reset it here.
+            # Force Reset Screen Size (fixes minigame resize issues)
             screen = pygame.display.set_mode((screen_width, screen_height))
 
     # --- C. Update Display ---
