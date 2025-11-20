@@ -11,7 +11,7 @@ from minigame.maze_generator import MazeGenerator
 from minigame.enemy import Enemy
 from minigame.fruits import Fruit
 
-# Path to assets 
+# --- Path to assets ---
 base_path = os.path.dirname(__file__)
 assets_path = os.path.join(base_path, "../../assets/audio/")
 
@@ -19,6 +19,9 @@ class Game:
     def __init__(self, selected_guinea_pig=None): 
         """
         Initialize the game.
+        
+        Args:
+            selected_guinea_pig: Dictionary containing selected guinea pig data
         """
         pygame.mixer.init() 
 
@@ -30,6 +33,7 @@ class Game:
         self.PACMAN_MAZE = generator.generate()
 
         # 2. Create player with guinea pig data
+        # We pass the selected data so the player gets the right color/speed
         self.player = Player(seed=42, guinea_pig_data=selected_guinea_pig)
         self.PACMAN_MAZE = self.player.add_player(self.PACMAN_MAZE)
 
@@ -73,17 +77,11 @@ class Game:
                 print("Back button clicked! Returning to homescreen.")
                 self.running = False
 
-            # --- DELETE THE OLD KEYDOWN / PLAYER MOVE CODE HERE ---
-            # We don't use event.type == KEYDOWN anymore because
-            # momentum requires holding the key down.
-
         self.button_back.check_hover(mouse_pos)
 
         if self.running:
-            # --- ADD THIS NEW LINE ---
-            # This checks for held keys and calculates momentum every frame
+            # Handle continuous input (momentum/movement)
             self.player.handle_input(self.maze)
-            # -------------------------
 
             # Move Enemy
             self.enemy.move_towards_player(self.player.player_pos(), self.maze)
@@ -97,7 +95,6 @@ class Game:
                 (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
             )
 
-            
     def draw(self, screen):
         """Draws the game state onto the screen."""
         screen.fill(BLACK)
@@ -133,14 +130,14 @@ class Game:
 
         # Create text
         name = self.selected_guinea_pig.get('name', 'Unknown')
-        text = hud_font.render(f"Playing as: {name}", True, GOLD)
+        text = hud_font.render(f"Playing as: {name}", True, GOLD) 
 
         # Position at top center
         text_rect = text.get_rect()
         text_rect.centerx = self.maze.width // 2
         text_rect.top = 10
 
-        # Draw background
+        # Draw background box for the text
         bg_rect = text_rect.inflate(20, 10)
         pygame.draw.rect(screen, BLACK, bg_rect, border_radius=5)
         pygame.draw.rect(screen, GOLD, bg_rect, 2, border_radius=5)

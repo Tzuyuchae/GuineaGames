@@ -7,6 +7,8 @@ class Player:
     def __init__(self, x=0, y=0, color=RED, seed=None, guinea_pig_data=None):
         """
         Initialize the player with stats, color, image, and momentum physics.
+        Args:
+            guinea_pig_data: Dict containing 'name', 'color', 'speed', etc.
         """
         self.pos_x = x
         self.pos_y = y
@@ -16,20 +18,20 @@ class Player:
         # --- 1. Handle Stats & Color ---
         self.name = guinea_pig_data.get('name', 'Player') if guinea_pig_data else 'Player'
         
-        # Stats from Data (0-100 scale assumed)
+        # Extract Stats (0-100 scale assumed)
         raw_speed = guinea_pig_data.get('speed', 50) if guinea_pig_data else 50
         raw_endurance = guinea_pig_data.get('endurance', 50) if guinea_pig_data else 50
 
-        # --- MOMENTUM SETTINGS ---
-        # Lower delay = Faster speed (milliseconds between steps)
-        self.BASE_DELAY = 300 - (raw_speed * 1)     # Start speed
-        self.MIN_DELAY = 120 - (raw_speed * 0.5)    # Top speed cap
+        # --- MOMENTUM PHYSICS SETTINGS ---
+        # Base delay calculation: Higher speed stat = Lower delay (faster movement)
+        self.BASE_DELAY = 300 - (raw_speed * 1)     # Starting speed
+        self.MIN_DELAY = 120 - (raw_speed * 0.5)    # Max speed cap
         self.FATIGUE_DELAY = 450                    # Speed when tired
         
-        # How long (ms) you can run at top speed before tiring
+        # Endurance: How long (ms) you can run at top speed
         self.ENDURANCE_LIMIT = 1000 + (raw_endurance * 40) 
 
-        # State Variables
+        # Physics State Variables
         self.current_delay = self.BASE_DELAY
         self.last_move_time = 0
         self.momentum_start_time = 0
@@ -37,6 +39,7 @@ class Player:
         self.is_moving = False
         self.is_fatigued = False
 
+        # Set Color from Data
         if guinea_pig_data and 'color' in guinea_pig_data:
             self.color = self._get_color_from_name(guinea_pig_data['color'])
         else:
@@ -49,14 +52,16 @@ class Player:
         try:
             raw_image = pygame.image.load(image_path).convert_alpha()
             self.image = pygame.transform.scale(raw_image, (TILE_SIZE, TILE_SIZE))
+            # Note: If you want to tint the actual image based on color, do it here
         except (FileNotFoundError, pygame.error):
-            print(f"Warning: Could not load player image at {image_path}. Using color block.")
+            # Fallback: Create a colored square if image fails
             self.image = pygame.Surface((TILE_SIZE, TILE_SIZE))
             self.image.fill(self.color)
 
         self.rect = self.image.get_rect()
 
     def _get_color_from_name(self, color_name):
+        """Convert string color names to RGB tuples."""
         color_map = {
             'brown': (139, 69, 19), 'white': (255, 255, 255),
             'orange': (255, 165, 0), 'black': (50, 50, 50),
@@ -100,11 +105,10 @@ class Player:
                 self.at_top_speed_since = 0
 
             # Calculate Acceleration
-            # Every 500ms of continuous movement, drop delay by 20ms until cap
             time_moving = now - self.momentum_start_time
             
             if not self.is_fatigued:
-                # Normal Acceleration
+                # Accelerate over time
                 acceleration_bonus = int(time_moving / 200) * 15 
                 target_delay = max(self.MIN_DELAY, self.BASE_DELAY - acceleration_bonus)
                 self.current_delay = target_delay
@@ -113,12 +117,10 @@ class Player:
                 if self.current_delay <= self.MIN_DELAY:
                     if self.at_top_speed_since == 0:
                         self.at_top_speed_since = now
-                        print(">>> HIT TOP SPEED!")
                     
                     # If we've been at top speed longer than endurance allows...
                     if (now - self.at_top_speed_since) > self.ENDURANCE_LIMIT:
                         self.is_fatigued = True
-                        print(">>> FATIGUED! SLOWING DOWN...")
             else:
                 # Fatigued State
                 self.current_delay = self.FATIGUE_DELAY
@@ -128,7 +130,7 @@ class Player:
                 move_success = self.move(dx, dy, maze)
                 self.last_move_time = now
                 
-                # If we hit a wall, kill momentum immediately
+                # If we hit a wall, kill momentum
                 if not move_success:
                     self.reset_momentum()
 
@@ -184,7 +186,7 @@ class Player:
         pixel_y = self.pos_y * TILE_SIZE
         self.rect.topleft = (pixel_x, pixel_y)
         
-        # Optional: Visual indicator for Fatigue (Tint red)
+        # Visual indicator for Fatigue (Tint red)
         if self.is_fatigued:
             tinted_img = self.image.copy()
             tinted_img.fill((100, 0, 0, 100), special_flags=pygame.BLEND_RGBA_MULT)
