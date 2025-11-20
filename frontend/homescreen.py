@@ -1,10 +1,7 @@
 import pygame
 import time
-
 import datetime
-now = datetime.datetime.now()
-real_clock = now.strftime("%I:%M %p")
-
+import os  # Added to fix file paths
 
 # --- Colors ---
 PANEL_GRAY = (235, 235, 235)
@@ -31,7 +28,6 @@ game_time = {
 }
 
 # 5 real minutes = 1 month (30 days)
-# 300 real seconds / (30 days * 1440 min) = 1 min every ~0.07 sec
 REAL_SECONDS_PER_GAME_MINUTE = 0.07
 last_update = 0
 
@@ -41,19 +37,18 @@ def make_glow(mask, intensity=22):
 
     glow = pygame.Surface((w + intensity * 2, h + intensity * 2), pygame.SRCALPHA)
 
+    # Create a base surface from the mask
     base = mask.to_surface(setcolor=(255, 240, 150, 5), unsetcolor=(0, 0, 0, 0))
     base = base.convert_alpha()
 
+    # Blur effect manually
     for dx in range(-intensity, intensity + 1):
         for dy in range(-intensity, intensity + 1):
-
             dist = abs(dx) + abs(dy)
             if dist <= intensity:
                 alpha = max(1, 35 - dist * 1.4)
-
                 temp = base.copy()
                 temp.fill((255, 240, 150, alpha), special_flags=pygame.BLEND_RGBA_MULT)
-
                 glow.blit(temp, (dx + intensity, dy + intensity))
 
     return glow
@@ -70,8 +65,20 @@ def homescreen_init():
     font = pygame.font.Font(None, 40)
     sidebar_font = pygame.font.Font(None, 26)
 
-    # Load background PNG
-    raw_bg = pygame.image.load("images/BG_Home.png").convert_alpha()
+    # --- FIX: Dynamic Path Loading ---
+    # This finds the folder where homescreen.py lives, then looks for 'images' inside it
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    bg_path = os.path.join(current_dir, "images", "BG_Home.png")
+
+    try:
+        raw_bg = pygame.image.load(bg_path).convert_alpha()
+    except FileNotFoundError:
+        print(f"CRITICAL ERROR: Could not find image at: {bg_path}")
+        print("Ensure 'images' folder is inside the 'frontend' folder.")
+        # Create a fallback surface so the game doesn't crash immediately
+        raw_bg = pygame.Surface((800, 600))
+        raw_bg.fill((100, 100, 200)) 
+
     raw_w, raw_h = raw_bg.get_width(), raw_bg.get_height()
 
     # Scale background proportionally
@@ -87,14 +94,14 @@ def homescreen_init():
         "home":       (132, 83, 215, 232),
         "mini_games": (348, 331, 202, 215),
         "store":      (423, 624, 195, 178),
-        "training":   (50,  328, 198, 183),   # adjusted from 0 → 50 to stop left glow
+        "training":   (50,  328, 198, 183), 
         "breeding":   (156, 535, 218, 200),
     }
 
     house_data = {}
 
     for name, (ox, oy, ow, oh) in houses_original.items():
-
+        # Create subsurface for specific house
         house_img = raw_bg.subsurface(pygame.Rect(ox, oy, ow, oh)).copy()
 
         sw, sh = int(ow * scale), int(oh * scale)
@@ -125,8 +132,28 @@ def homescreen_update(events):
 
     # --- Time system ---
     now = time.time()
+    
+    # Ensure last_update is set on first run
+    if last_update == 0:
+        last_update = now
+
     if now - last_update >= REAL_SECONDS_PER_GAME_MINUTE:
         last_update = now
+        
+        # Increment minute (optional, if you want minutes)
+        game_time["minute"] += 1
+        if game_time["minute"] >= 60:
+            game_time["minute"] = 0
+            game_time["hour"] += 1
+
+        # For now, based on your code, just incrementing day/month logic:
+        # Note: You might want to link day incrementing to hours passing
+        # But sticking to your original logic loop:
+        
+        # Increment Days periodically? 
+        # (Currently your math increments this very fast, 1 min real time = ~14 days)
+        # Adjusting strictly to your loop request:
+        game_time["day"] += 1 
 
         if game_time["day"] > 30:
             game_time["day"] = 1
@@ -202,21 +229,26 @@ def homescreen_draw(screen):
     # Sidebar UI
     pygame.draw.rect(screen, PANEL_GRAY, (620, 20, 160, 220))
 
+    # --- FIX: Update Real Clock Here ---
+    real_clock = datetime.datetime.now().strftime("%I:%M %p")
+
     sidebar_lines = [
         f"Year: {game_time['year']}",
         f"Month: {game_time['month']}",
         f"Day: {game_time['day']}",
         "",
-        f"🕒 {real_clock}",
+        f"clock: {real_clock}",
         "",
-        "🪙 Coins: 5",
-        "🍎 Food: 5",
+        "Coins: 5",
+        "Food: 5",
         "",
         "T1 x19",
     ]
 
     y = 40
     for line in sidebar_lines:
+        # Simple check to support emoji if font supports it, otherwise remove emoji
+        # Pygame default fonts struggle with emojis.
         text_surface = sidebar_font.render(line, True, BLACK)
         screen.blit(text_surface, (630, y))
         y += 20

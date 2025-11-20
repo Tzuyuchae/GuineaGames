@@ -7,7 +7,6 @@ from minigame.settings import GREEN, TILE_SIZE
 
 # Defining path to fruit assets (if needed in future)
 base_path = os.path.dirname(__file__)
-# --- This path isn't needed here, but correcting it for consistency ---
 image_path = os.path.join(base_path, "../images/")
 
 class Fruit:
