@@ -1,5 +1,5 @@
 import pygame
-from button import Button
+from frontend_button import Button
 
 # Optional: Import API client for database connectivity
 try:
@@ -10,18 +10,18 @@ except ImportError:
     print("API client not available. Run in standalone mode.")
 
 # A 'Back' button
-button_start = Button(400, 500, 200, 70, 'Start', (150, 0, 0), (200, 0, 0))
+button_start = Button(pygame.Rect(400, 500, 200, 70), 'Start')
 
 def title_update(events):
     """Handles events for the breeding page."""
     mouse_pos = pygame.mouse.get_pos()
     
     for event in events:
-        if button_start.check_click(event):
+         if button_start.is_clicked(event):
             print("Start button clicked! Returning to homescreen.")
-            return 'homescreen' # Return to the menu
-            
-    button_start.check_hover(mouse_pos)
+            return 'homescreen'  # Return to the menu
+
+   # button_start.check_hover(mouse_pos)
     return None
 
 def title_draw(screen):
