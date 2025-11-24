@@ -2,6 +2,7 @@
 import sqlite3
 import pygame 
 import datetime
+from models import Pets
 
 sqliteConnection = sqlite3.connect("database.py")
 cursor = sqliteConnection.cursor()
@@ -19,67 +20,70 @@ pygame.init()
 screen = pygame.display.set_mode((128, 128))
 clock = pygame.time.Clock()
 
-#id, owner_id, name, species, color, age_months, health, speed, hunger, endurance, score, sizeScalar, last_updated
-def getPlayerPigs(self): 
-    dict = {}
+# pigs are stored as follow in DB:
+# id, owner_id, name, species, color, age_months, health, speed, hunger, endurance, score, sizeScalar, last_updated
+def readInGPigs(self): 
+    gpigs = {}
     cursor.execute("SELECT * FROM PETS")
     rows = cursor.fetchall()
     for row in rows:
-        dict = {
-            row[0] : {
-                "id" : row[0],
-                "name" : row[2],
-                "species" : row[3],
-                "color" : row[4],
-                "age_months" : row[5],
-                "health" : row[6],
-                "speed" : row[7],
-                "hunger" : row[8],
-                "endurance" : row [9],
-                "score": row[10],
-                "sizeScalar" : row[11],
-                "last_updated" : row[12],
-            }
-        }
-    return dict
+        #newPet doesn't take in datetime as an arg, it instead runs datetime.datetime inside the method
+        gpig = Pets.newPet(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11])
+        gpigs[row[0]] = gpig
 
-def inc_month(self, playerPigs):
-    for i in playerPigs.items():
-        playerPigs[i]["hunger"] -= 1
-        playerPigs[i]["age_months"] += 1
+    return gpigs
 
-        age = playerPigs[i]["age_months"]
+def newPig():
+    None
+
+
+def inc_month(self, gpigs):
+    for i in gpigs.items():
+        # if gpig was already at 0 hunger, they starve
+        if i.get_age_months == 0:
+            # display message
+            gpigs.pop(i)
+
+        # gpigs age and get hungrier
+        gpigs[i].inc_age_months()
+        age = gpigs[i].get_age_months()
+
+        # Midsommar the old gpigs (sorry for spoilers)
         if age == 60:
             # display message
-            playerPigs.pop(i)
-        elif age == 57:
-            playerPigs[i]["speed"] == max (0, playerPigs[i]["speed"] / 2)
-            playerPigs[i]["endurance"] == max (0, playerPigs[i]["endurance"] /2)
-        elif age == 3:
-            playerPigs[i]["sizeScalar"] = 1
-        
-        if playerPigs[i]["hunger"] == 0:
-            # display message
-            playerPigs.pop(i)
+            gpigs.pop(i)
 
+        # decrease stats in last 3 months
+        elif age == 57:
+            gpigs[i].speed_decrease_old_pigs()
+            gpigs[i].endurance_decrease_old_pigs()
+
+        # gpigs grow to full size after 3 months, start at 0 months old
+        elif age == 3:
+            gpigs[i].set_size_full_grown()
+        
+        #increase score as they age (0-60 month lifespan)
+        # pigs gain a total of 179 points across lifetime
+        if age >= 57:
+           gpigs[i].add_to_score(10)
+        elif age >= 48:
+            gpigs[i].add_to_score(5)
+        elif age >= 36:
+            gpigs[i].add_to_score(3)
+        elif age >= 12:
+            gpigs[i].add_to_score(2)
+        elif age >= 3:
+            gpigs[i].add_to_score(1)
+    return gpigs
 
 def closingUpdate(self, pigs):
     for i in pigs.items():
-        cursor.execute("""
-            UPDATE pets
-            SET name = {0}, age_months = {1}, health = {2}, speed = {3}, hunger = {4}, endurance = {5}, score = {6}, sizeScalar = {7}, last_updated = {8}, 
-            WHERE pets.id = {9}
-            """.format(pigs[i]["name"], 
-                pigs[i]["age_months"], 
-                pigs[i]["health"], 
-                pigs[i]["speed"], 
-                pigs[i]["hunger"], 
-                pigs[i]["endurance"], 
-                pigs[i]["score"], 
-                pigs[i]["sizeScalar"], 
-                datetime.datetime, 
-                pigs[i]["id"]
-                )
+        vals = i.get_all_info()
+        cursor.execute(f"""
+            UPDATE PETS
+            SET name = {vals[1]}, age_months = {vals[2]}, health = {vals[3]}, speed = {vals[4]}, hunger = {vals[5]}, endurance = {vals[6]}, score = {vals[7]}, sizeScalar = {vals[8]}, last_updated = {vals[9]}, 
+            WHERE PETS.id = {vals[0]}
+            """
         )
     sqliteConnection.commit()
     sqliteConnection.close()

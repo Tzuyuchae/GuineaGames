@@ -1,6 +1,6 @@
 import pygame
 from guineapig import Guineapig
-from time import getPlayerPigs, inc_month, closingUpdate
+from time import readInGPigs, inc_month, closingUpdate
 
 
 # Initialize Pygame
@@ -30,14 +30,14 @@ image_rect.center = (screen_width // 2, screen_height // 2)  # Center the image
 
 
 # --- THIS IS YOUR "MAIN" LOOP ---
-playerPigs = getPlayerPigs()
+gpigs = readInGPigs()
 FPS = 30
 running = True
 while running:
     # 1. Handle Events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            running = closingUpdate(playerPigs)
+            running = closingUpdate(gpigs)
 
     # 2. Update Game Logic (nothing to update yet)
 
