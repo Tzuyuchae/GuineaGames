@@ -1,11 +1,9 @@
-### File: minigame/fruits.py ###
-
 import pygame
 import random 
 import os
 from minigame.settings import GREEN, TILE_SIZE
 
-# Defining path to fruit assets (if needed in future)
+# Defining path to fruit assets
 base_path = os.path.dirname(__file__)
 image_path = os.path.join(base_path, "../images/")
 
@@ -14,9 +12,6 @@ class Fruit:
         self.fruit_chance = fruit_chance
         self.color = color
         self.seed = seed
-        
-        # --- NO IMAGE LOADING NEEDED HERE ---
-        # (See the note below)
     
     def add_fruits(self, grid):
         """Randomly add fruits ('2') to the maze."""
@@ -27,7 +22,6 @@ class Fruit:
         for row in grid:
             new_row = ''
             for tile in row:
-                # Check if tile is path '0' and not player 'P'
                 if tile == '0' and random.random() < self.fruit_chance and tile != 'P':
                     new_row += '2'  # fruit
                 else:
@@ -36,14 +30,21 @@ class Fruit:
         return new_grid
     
     def if_collected(self, player_pos, grid):
-        """Check if the player has collected a fruit."""
+        """
+        Check if the player has collected a fruit.
+        Returns: (updated_grid, collected_amount)
+        """
         x, y = player_pos
+        collected = 0
+        
         if grid[y][x] == '2':
             # Remove the fruit from the grid
             new_row = list(grid[y])
             new_row[x] = '0'  # Replace fruit with path
             grid[y] = ''.join(new_row)
-        return grid
+            collected = 1 # Found a fruit!
+            
+        return grid, collected
 
     def all_fruits_collected(self, grid):
         """Check if all fruits have been collected."""
@@ -53,11 +54,4 @@ class Fruit:
         return True
 
     def draw(self, screen, grid):
-        """
-        This method is no longer needed.
-        The Maze.draw() method now handles drawing the fruit images.
-        """
-        # --- 1. REMOVE THE OLD DRAW CODE ---
-        # By doing nothing, we stop this class from
-        # drawing colored squares on top of your fruit art.
         pass
