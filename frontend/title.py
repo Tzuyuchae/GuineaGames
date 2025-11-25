@@ -1,59 +1,58 @@
 import pygame
-import os
-from frontend_button import Button
+from pixelButton import PixelButton
 
-# Setup paths
-base_path = os.path.dirname(os.path.abspath(__file__))
-bg_path = os.path.join(base_path, "Global Assets", "Sprites", "More Sprites", "BG Art", "Title", "BG_Title.png")
-
-# Colors
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GOLD = (255, 215, 0)
-
-# Button
-button_start = Button(pygame.Rect(236, 400, 200, 60), 'START') # Centered roughly for 672w
+# A 'Back' button
+button_start = PixelButton(336, 430, 'Play', 'images/titleButton.png', 'images/titleButtonHover.png', 'images/titleButtonPressed.png', (0,0,0))
+button_settings = PixelButton(336, 520, 'Settings', 'images/titleButton.png', 'images/titleButtonHover.png', 'images/titleButtonPressed.png', (0,0,0))
+button_quit = PixelButton(336, 610, 'Quit', 'images/titleButton.png', 'images/titleButtonHover.png', 'images/titleButtonPressed.png', (0,0,0))
 
 def title_update(events):
     """Handles events for the title page."""
+    mouse_pos = pygame.mouse.get_pos()
+
     for event in events:
-         if button_start.is_clicked(event):
-            print("Start button clicked! Going to homescreen.")
-            return 'homescreen'
+        if button_start.check_mouseDown(event, mouse_pos):
+            print("Start button clicked! Setting mousedown image.")
+
+        if button_settings.check_mouseDown(event, mouse_pos):
+            print("Settings button clicked! Setting mousedown image.")
+
+        if button_quit.check_mouseDown(event, mouse_pos):
+            print("Quit button clicked! Setting mousedown image.")
+
+        if button_start.check_mouseUp(event):
+            print("Start button clicked! Returning to homescreen.")
+            return 'homescreen' # Return to the menu
+
+        if button_settings.check_mouseUp(event):
+            print("Settings button clicked")
+            return 'settings' # Return to the settings (add settings page route)
+
+        if button_quit.check_mouseUp(event):
+            print("Quit button clicked")
+            return 'quit' # Quit (add quit route)
+
+
+    button_start.check_hover(mouse_pos)
+    button_settings.check_hover(mouse_pos)
+    button_quit.check_hover(mouse_pos)
     return None
 
 def title_draw(screen):
-    """Draws the title page with background."""
-    screen_w, screen_h = screen.get_size()
-    
-    # 1. Draw Background
-    try:
-        bg_img = pygame.image.load(bg_path).convert()
-        bg_img = pygame.transform.scale(bg_img, (screen_w, screen_h))
-        screen.blit(bg_img, (0, 0))
-    except (FileNotFoundError, pygame.error):
-        screen.fill((135, 206, 235)) # Sky blue fallback
+    """Draws the title page."""
+    #load background img
+    background_img = pygame.image.load("images/BG_Title.png").convert()
 
-    # 2. Draw Title Text
-    # Using default font for now, but scaling it up
-    try:
-        title_font = pygame.font.Font(None, 80)
-        shadow_font = pygame.font.Font(None, 80)
-    except:
-        title_font = pygame.font.SysFont("Arial", 60, bold=True)
-        shadow_font = pygame.font.SysFont("Arial", 60, bold=True)
+    # Draw background image
+    screen.blit(background_img, (0, 0))
 
-    text = "GUINEA GAMES"
-    
-    # Draw Shadow
-    text_shadow = shadow_font.render(text, True, BLACK)
-    shadow_rect = text_shadow.get_rect(center=(screen_w // 2 + 3, 153))
-    screen.blit(text_shadow, shadow_rect)
+    # Draw logo
+    logo_img = pygame.image.load("images/guineaGoneWildLogo.png").convert_alpha()
+    logo_img = pygame.transform.scale(logo_img, (300, 300))
+    logo_rect = logo_img.get_rect(center=(336, 200))   # X, Y position
+    screen.blit(logo_img, logo_rect)
 
-    # Draw Main Text
-    text_surf = title_font.render(text, True, GOLD)
-    text_rect = text_surf.get_rect(center=(screen_w // 2, 150))
-    screen.blit(text_surf, text_rect)
-
-    # 3. Draw Button
+    # Draw the back button
     button_start.draw(screen)
+    button_settings.draw(screen)
+    button_quit.draw(screen)
