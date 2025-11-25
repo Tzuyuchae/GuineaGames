@@ -27,7 +27,6 @@ import store_page
 from store_module import PlayerInventory
 from minigame.minigame_page import MinigamePage
 
-# --- RE-ENABLED IMPORTS ---
 # Make sure breeding.py exists in your folder!
 import breeding 
 # import details_page # Keep this commented until you have the file
@@ -36,7 +35,9 @@ import breeding
 
 # Initialize Homescreen
 try:
-    homescreen.homescreen_init()
+    # --- THIS WAS THE FIX ---
+    # We must pass screen_width and screen_height here now!
+    homescreen.homescreen_init(screen_width, screen_height)
 except AttributeError:
     pass
 
@@ -82,7 +83,6 @@ while running:
             elif new_state == 'store':
                 currentmenu = 'store'
             
-            # --- RE-ENABLED BREEDING NAVIGATION ---
             elif new_state == 'breeding':
                 currentmenu = 'breeding'
 
@@ -103,7 +103,6 @@ while running:
 
     # --- BREEDING PAGE ---
     elif currentmenu == 'breeding':
-        # Assuming breeding.py has breeding_update(events) and breeding_draw(screen)
         new_state = breeding.breeding_update(events)
         breeding.breeding_draw(screen)
         

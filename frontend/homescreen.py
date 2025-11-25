@@ -1,7 +1,7 @@
 import pygame
 import time
 import datetime
-import os  # Added to fix file paths
+import os
 
 # --- Colors ---
 PANEL_GRAY = (235, 235, 235)
@@ -58,15 +58,14 @@ def make_glow(mask, intensity=22):
 #  INIT
 # ----------------------------------------------------------
 
-def homescreen_init():
+def homescreen_init(screen_w, screen_h):
     global font, sidebar_font, background, BG_POS, house_data
 
     pygame.font.init()
     font = pygame.font.Font(None, 40)
     sidebar_font = pygame.font.Font(None, 26)
 
-    # --- FIX: Dynamic Path Loading ---
-    # This finds the folder where homescreen.py lives, then looks for 'images' inside it
+    # --- Dynamic Path Loading ---
     current_dir = os.path.dirname(os.path.abspath(__file__))
     bg_path = os.path.join(current_dir, "images", "BG_Home.png")
 
@@ -74,19 +73,20 @@ def homescreen_init():
         raw_bg = pygame.image.load(bg_path).convert_alpha()
     except FileNotFoundError:
         print(f"CRITICAL ERROR: Could not find image at: {bg_path}")
-        print("Ensure 'images' folder is inside the 'frontend' folder.")
-        # Create a fallback surface so the game doesn't crash immediately
+        # Create a fallback surface so the game doesn't crash
         raw_bg = pygame.Surface((800, 600))
         raw_bg.fill((100, 100, 200)) 
 
     raw_w, raw_h = raw_bg.get_width(), raw_bg.get_height()
 
-    # Scale background proportionally
-    screen_w, screen_h = 800, 600
+    # --- FIX: Scale based on ACTUAL Main.py screen height ---
     scale = screen_h / raw_h
     new_w = int(raw_w * scale)
+    new_h = int(raw_h * scale)
 
-    background = pygame.transform.scale(raw_bg, (new_w, screen_h))
+    background = pygame.transform.scale(raw_bg, (new_w, new_h))
+    
+    # Center the background horizontally
     BG_POS = ((screen_w - new_w) // 2, 0)
 
     # House coordinates from PNG
@@ -140,19 +140,12 @@ def homescreen_update(events):
     if now - last_update >= REAL_SECONDS_PER_GAME_MINUTE:
         last_update = now
         
-        # Increment minute (optional, if you want minutes)
+        # Increment minute
         game_time["minute"] += 1
         if game_time["minute"] >= 60:
             game_time["minute"] = 0
             game_time["hour"] += 1
 
-        # For now, based on your code, just incrementing day/month logic:
-        # Note: You might want to link day incrementing to hours passing
-        # But sticking to your original logic loop:
-        
-        # Increment Days periodically? 
-        # (Currently your math increments this very fast, 1 min real time = ~14 days)
-        # Adjusting strictly to your loop request:
         game_time["day"] += 1 
 
         if game_time["day"] > 30:
@@ -188,6 +181,9 @@ def homescreen_update(events):
 # ----------------------------------------------------------
 
 def homescreen_draw(screen):
+    # --- FIX: Clear screen to remove ghosting from other pages ---
+    screen.fill(BLACK)
+
     screen.blit(background, BG_POS)
 
     mouse_pos = pygame.mouse.get_pos()
@@ -227,9 +223,11 @@ def homescreen_draw(screen):
                 )
 
     # Sidebar UI
-    pygame.draw.rect(screen, PANEL_GRAY, (620, 20, 160, 220))
+    # Adjust sidebar position if needed based on new screen size,
+    # but for now we keep it relative to the right side
+    w, h = screen.get_size()
+    pygame.draw.rect(screen, PANEL_GRAY, (w - 180, 20, 160, 220))
 
-    # --- FIX: Update Real Clock Here ---
     real_clock = datetime.datetime.now().strftime("%I:%M %p")
 
     sidebar_lines = [
@@ -247,8 +245,6 @@ def homescreen_draw(screen):
 
     y = 40
     for line in sidebar_lines:
-        # Simple check to support emoji if font supports it, otherwise remove emoji
-        # Pygame default fonts struggle with emojis.
         text_surface = sidebar_font.render(line, True, BLACK)
-        screen.blit(text_surface, (630, y))
+        screen.blit(text_surface, (w - 170, y))
         y += 20

@@ -13,14 +13,16 @@ class Enemy:
         
         # Load Image
         base_path = os.path.dirname(os.path.abspath(__file__))
-        # Adjust path to wherever your assets are. 
-        # If this fails, it falls back to a blue square.
-        image_path = os.path.join(base_path, "../../frontend/images/enemy.png")
+        # FIX: Pointing to "frontend/game sprites/mini-game"
+        image_path = os.path.join(base_path, "../../frontend/Global Assets/Sprites/Mini-game/MG_Dragon.png")
+
         
         try:
             raw_image = pygame.image.load(image_path).convert_alpha()
             self.image = pygame.transform.scale(raw_image, (TILE_SIZE, TILE_SIZE))
         except (FileNotFoundError, pygame.error):
+            # Fallback if image not found
+            print(f"Warning: Enemy image not found at {image_path}")
             self.image = pygame.Surface((TILE_SIZE, TILE_SIZE))
             self.image.fill(self.color)
             
@@ -53,7 +55,6 @@ class Enemy:
             self.pos_x = ex
             self.pos_y = ey
             
-        # THIS RETURN STATEMENT WAS LIKELY MISSING
         return [''.join(row) for row in new_grid]
 
     def move_towards_player(self, player_pos, maze):
