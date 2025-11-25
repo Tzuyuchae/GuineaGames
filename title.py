@@ -1,5 +1,5 @@
 import pygame
-from button import Button
+from frontend.minigame.button import Button
 
 # Initialize font module
 pygame.font.init()

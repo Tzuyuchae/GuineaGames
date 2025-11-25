@@ -1,104 +1,71 @@
 import pygame
-import homescreen
-import details_page
-import breeding
-import minigame.minigame_page
-import title
-import settings_page
-import help_page
-import random  # --- NEW ---
+import sys
+import os
+import ctypes  # Needed for the screen resolution fix
 
-# --- NEW: Import all your game classes ---
-from minigame.maze_generator import MazeGenerator
-from minigame.maze import Maze
-from minigame.player import Player
-from minigame.enemy import Enemy
-from minigame.fruits import Fruit
-# from game import Game # We are building the logic here instead
-# from guineapig import Guineapig
+# --- 1. FIX WINDOWS SCALING (DPI AWARENESS) ---
+try:
+    ctypes.windll.user32.SetProcessDPIAware()
+except AttributeError:
+    pass
 
-# Initialize Pygame
+# --- 2. INITIALIZE PYGAME ---
 pygame.init()
 
-# Set screen dimensions
+# Setup Screen Dimensions
 screen_width = 672
 screen_height = 864
 screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("My Game")
+pygame.display.set_caption("Guinea Games")
 clock = pygame.time.Clock()
+FPS = 60
 
-# This is your "state machine" variable
+# --- 3. IMPORT CUSTOM MODULES ---
+import homescreen
+import title
+import store_page
+from store_module import PlayerInventory
+from minigame.minigame_page import MinigamePage
+
+# Make sure breeding.py exists in your folder!
+import breeding 
+# import details_page # Keep this commented until you have the file
+
+# --- 4. INITIALIZE PAGES & DATA ---
+
+# Initialize Homescreen
+try:
+    # FIX: Pass the actual screen width/height so it scales correctly
+    homescreen.homescreen_init(screen_width, screen_height)
+except AttributeError:
+    pass
+
+# Initialize Store
+store_page.store_init()
+
+# Initialize Inventory
+player_inventory = PlayerInventory(coins=500)
+
+# Initialize Minigame Manager
+minigame_manager = MinigamePage(user_id=1)
+
+# --- 5. MAIN GAME LOOP ---
 currentmenu = "title"
-
-
-# --- NEW: Function to set up a new game ---
-def start_new_game():
-    """Initializes and returns all objects needed for a new game."""
-    print("Starting new game...")
-    # 1. Create generator (use a random seed for variety)
-    generator = MazeGenerator(seed=random.randint(0, 9999))
-
-    # 2. Create layout (this includes fruits)
-    base_layout = generator.generate()
-
-    # 3. Create player and add to layout
-    player = Player()
-    layout_with_player = player.add_player(base_layout)
-
-    # 4. Create enemy and add to layout
-    enemy = Enemy()
-    final_layout = enemy.add_enemies(layout_with_player)
-
-    # 5. Create the Maze object with the final layout
-    maze = Maze(final_layout)
-
-    # 6. Create the Fruit object (for drawing and checking)
-    fruit_obj = Fruit()
-
-    return maze, player, enemy, fruit_obj
-
-
-# --- NEW: Initialize game objects ---
-# We call this once to have them ready
-maze, player, enemy, fruit_obj = start_new_game()
-
-
-# --- THIS IS THE "MAIN" LOOP ---
 running = True
+
 while running:
-    # 1. Handle Events
+    # A. Event Handling
     events = pygame.event.get()
     for event in events:
         if event.type == pygame.QUIT:
             running = False
 
-    # 2. Update Game Logic
-    if currentmenu == 'homescreen':
-        new_state = homescreen.menu_update(events)
-        if new_state == 'gameplay':
-            # --- NEW: Reset the game every time "PLAY" is clicked ---
-            maze, player, enemy, fruit_obj = start_new_game()
-            currentmenu = 'gameplay'
-        elif new_state:
-            currentmenu = new_state
-
-    elif currentmenu == 'details':
-        new_state = details_page.details_update(events)
-        if new_state:
-            currentmenu = new_state
-
-    elif currentmenu == 'breeding':
-        new_state = breeding.breeding_update(events)
-        if new_state:
-            currentmenu = new_state
-
-    elif currentmenu == 'minigame':
-        new_state = minigame_page.minigame_update(events)
-        if new_state:
-            currentmenu = new_state
-
-    elif currentmenu == 'title':
+    # B. State Machine (Update & Draw)
+    
+    # --- TITLE SCREEN ---
+    if currentmenu == 'title':
         new_state = title.title_update(events)
+        title.title_draw(screen)
         if new_state:
             currentmenu = new_state
 
@@ -152,32 +119,26 @@ while running:
         details_page.details_draw(screen)
 
     elif currentmenu == 'breeding':
+        new_state = breeding.breeding_update(events)
         breeding.breeding_draw(screen)
+        
+        if new_state == 'homescreen':
+            currentmenu = 'homescreen'
 
+    # --- MINIGAME (Selector + Maze) ---
     elif currentmenu == 'minigame':
-        minigame_page.minigame_draw(screen)
+        result = minigame_manager.update(events)
+        minigame_manager.draw(screen)
+        
+        if result == 'homescreen':
+            currentmenu = 'homescreen'
+            # Force Reset Screen Size (fixes minigame resize issues if any)
+            screen = pygame.display.set_mode((screen_width, screen_height))
 
-    elif currentmenu == 'title':
-        title.title_draw(screen)
-
-    elif currentmenu == 'settings':
-        settings_page.settings_draw(screen)
-
-    elif currentmenu == 'help':
-        help_page.help_draw(screen)
-
-    # --- NEW: Added the 'gameplay' draw logic ---
-    elif currentmenu == 'gameplay':
-        maze.draw(screen)
-        fruit_obj.draw(screen, maze.layout) # Draw fruits
-        player.draw(screen)
-        enemy.draw(screen)
-
-    # 4. Update the Display
+    # --- C. Update Display ---
     pygame.display.flip()
+    clock.tick(FPS)
 
-    # 5. Cap the frame rate
-    clock.tick(60)
-
-# Quit Pygame
+# Quit
 pygame.quit()
+sys.exit()

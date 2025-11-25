@@ -80,7 +80,8 @@ def test_create_user():
         user = api.create_user(username, email, "test_password_123")
 
         print_success("User created successfully")
-        print(f"  User ID: {user.get('user_id')}")
+        user_id = user.get('id')
+        print(f"  User ID: {user_id}")
         print(f"  Username: {user.get('username')}")
         print(f"  Email: {user.get('email')}")
 
@@ -103,18 +104,21 @@ def test_create_pet(user):
         return None
 
     try:
-        user_id = user.get('user_id')
+        user_id = user.get('id')
         pet_name = "Test_Guinea_Pig"
         pet_color = "brown"
+        pet_species = "guinea_pig"  # or whatever you’re using
 
         print(f"  Creating pet: {pet_name}")
         print(f"  Owner: User ID {user_id}")
+        print(f"  Species: {pet_species}")
         print(f"  Color: {pet_color}")
 
-        pet = api.create_pet(user_id, pet_name, pet_color)
+        pet = api.create_pet(user_id, pet_name, pet_species, pet_color)
+
 
         print_success("Pet created successfully")
-        print(f"  Pet ID: {pet.get('pet_id')}")
+        print(f"  Pet ID: {pet.get('id')}")
         print(f"  Name: {pet.get('name')}")
         print(f"  Color: {pet.get('color')}")
         print(f"  Health: {pet.get('health')}")
@@ -140,7 +144,13 @@ def test_marketplace_valuation(pet):
         return False
 
     try:
-        pet_id = pet.get('pet_id')
+        pet_id = pet.get('id')
+
+        # safety check
+        if pet_id is None:
+            raise ValueError("Pet dict has no 'id' field. "
+                             "Check your create_pet() return value.")
+
         print(f"  Getting valuation for Pet ID: {pet_id}")
 
         valuation = api.get_pet_valuation(pet_id)
