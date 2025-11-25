@@ -7,7 +7,7 @@ pygame.font.init()
 # Define title font
 try:
     TITLE_FONT = pygame.font.SysFont('Arial', 48, bold=True)
-except:
+except pygame.error:
     TITLE_FONT = pygame.font.Font(None, 60)
 
 # Colors

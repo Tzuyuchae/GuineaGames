@@ -10,7 +10,7 @@ try:
     HEADING_FONT = pygame.font.SysFont('Arial', 24, bold=True)
     TEXT_FONT = pygame.font.SysFont('Arial', 18)
     SMALL_FONT = pygame.font.SysFont('Arial', 16)
-except:
+except pygame.error:
     TITLE_FONT = pygame.font.Font(None, 48)
     HEADING_FONT = pygame.font.Font(None, 32)
     TEXT_FONT = pygame.font.Font(None, 24)
