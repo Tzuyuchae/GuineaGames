@@ -1,5 +1,6 @@
 import pygame
 from minigame.guinea_pig_selector import GuineaPigSelector
+from minigame.final_score_screen import FinalScoreScreen
 from minigame.game import Game
 
 class MinigamePage:
@@ -8,7 +9,7 @@ class MinigamePage:
     Manages switching between the Guinea Pig Selector and the actual Game loop.
     """
     def __init__(self, user_id=1):
-        self.state = 'selector'  # Can be 'selector' or 'playing'
+        self.state = 'selector'  # Can be 'selector' or 'playing' or 'reviewing_score'
         self.guinea_pig_selector = None
         self.game_instance = None
         self.selected_guinea_pig = None
@@ -17,6 +18,10 @@ class MinigamePage:
     def initialize_selector(self):
         """Initialize the guinea pig selector."""
         self.guinea_pig_selector = GuineaPigSelector(user_id=self.user_id)
+
+    def initialize_review_screen(self):
+        """Initialize the review score screen."""
+        self.final_score_screen = FinalScoreScreen()
 
     def update(self, events):
         """
@@ -54,6 +59,18 @@ class MinigamePage:
                 # Check if the game loop has finished (Win, Lose, or Back button)
                 # We check the .running attribute of the Game class
                 if not self.game_instance.running:
+                    #self._reset_state()
+                    #return 'homescreen'
+                    self.initialize_review_screen()
+                    self.state = 'reviewing_score'
+
+        # --- LOGIC FOR REVIEW SCORE SCREEN ---
+        elif self.state == 'reviewing_score':
+            if self.final_score_screen:
+                result = self.final_score_screen.update(events)
+
+                # Case: User clicked Back in the review screen
+                if result == 'home':
                     self._reset_state()
                     return 'homescreen'
 
@@ -66,6 +83,9 @@ class MinigamePage:
         
         elif self.state == 'playing' and self.game_instance:
             self.game_instance.draw(screen)
+
+        elif self.state == 'reviewing_score' and self.final_score_screen:
+            self.final_score_screen.draw(screen)
 
     def _reset_state(self):
         """Helper to reset all minigame state variables."""
