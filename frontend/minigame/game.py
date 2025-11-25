@@ -16,26 +16,28 @@ base_path = os.path.dirname(__file__)
 assets_path = os.path.join(base_path, "../../assets/audio/")
 
 class Game: 
-    def __init__(self, selected_guinea_pig=None): 
+    def __init__(self, selected_guinea_pig=None, player_inventory=None): 
         """
         Initialize the game.
+        Args:
+            player_inventory: The main PlayerInventory object to update
         """
         pygame.mixer.init() 
 
         self.running = True
         self.selected_guinea_pig = selected_guinea_pig
+        self.player_inventory = player_inventory
 
         # 1. Generate Maze
         generator = MazeGenerator(fruit_chance=0.1, seed=42)
         self.PACMAN_MAZE = generator.generate()
 
-        # 2. Create player with guinea pig data
+        # 2. Create player
         self.player = Player(seed=42, guinea_pig_data=selected_guinea_pig)
         self.PACMAN_MAZE = self.player.add_player(self.PACMAN_MAZE)
 
         # 3. Create Enemies
         self.enemy = Enemy(seed=42)
-        # Ensure we handle potential errors if add_enemies fails
         try:
             self.PACMAN_MAZE = self.enemy.add_enemies(self.PACMAN_MAZE)
         except Exception as e:
@@ -50,15 +52,14 @@ class Game:
 
         # 5. Initialize Maze Render Object
         self.maze = Maze(self.PACMAN_MAZE)
-        # 6. Setup 'Back' Button (CRITICAL STEP)
-        # We verify the maze dimensions first
+        
+        # 6. Setup 'Back' Button
         if hasattr(self.maze, 'width') and hasattr(self.maze, 'height'):
             button_w = 200
             button_h = 70
             button_x = (self.maze.width - button_w) // 2
             button_y = self.maze.height - button_h - 10
         else:
-            # Fallback if maze didn't load correctly
             button_x, button_y, button_w, button_h = 100, 500, 200, 70
             
         self.button_back = Button(button_x, button_y, button_w, button_h,
@@ -68,20 +69,17 @@ class Game:
         self.play_music("music.wav")
 
     def play_music(self, filename):
-        """Safely loads and plays music."""
         try:
             pygame.mixer.music.load(os.path.join(assets_path, filename))
             pygame.mixer.music.play(-1)
         except pygame.error as e:
-            print(f"Music Error (check assets path): {e}")
+            # print(f"Music Error: {e}")
+            pass
 
     def update(self, events):
-        """Handles all game logic for one frame."""
         mouse_pos = pygame.mouse.get_pos()
 
         for event in events:
-            # 1. Handle Button Click
-            # This check will now only run if button_back exists
             if hasattr(self, 'button_back') and self.button_back.check_click(event):
                 print("Back button clicked! Returning to homescreen.")
                 self.running = False
@@ -90,32 +88,33 @@ class Game:
             self.button_back.check_hover(mouse_pos)
 
         if self.running:
-            # Handle continuous input (momentum/movement)
             self.player.handle_input(self.maze)
-
-            # Move Enemy
             self.enemy.move_towards_player(self.player.player_pos(), self.maze)
             
-            # Check game states
             self.check_lose()
             self.check_win()
             self.check_exit()
 
-            # Check fruit collision
-            self.PACMAN_MAZE = self.fruit.if_collected(
+            # --- CHECK FRUIT COLLISION & UPDATE INVENTORY ---
+            # Get both the new grid AND the number of collected items
+            self.PACMAN_MAZE, collected_amount = self.fruit.if_collected(
                 (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
             )
+            
+            if collected_amount > 0 and self.player_inventory:
+                # Assuming 'Banana' is the default fruit found in maze
+                # You can change this to random fruits if desired
+                self.player_inventory.add_food('Banana', collected_amount)
+                print(f"Collected fruit! Total Food: {self.player_inventory.food}")
+
     def check_exit(self):
-        """Check if the player is at the edge of the map to exit."""
         if (self.player.pos_x == 0 or self.player.pos_x == self.maze.cols - 1 or
             self.player.pos_y == 0 or self.player.pos_y == self.maze.rows - 1):
             print("Exited the maze!")
             self.running = False
 
     def draw(self, screen):
-        """Draws the game state onto the screen."""
         screen.fill(BLACK)
-
         self.maze.draw(screen)
         self.player.draw(screen)
         self.enemy.draw(screen)
@@ -124,42 +123,32 @@ class Game:
         if hasattr(self, 'button_back'):
             self.button_back.draw(screen)
 
-        # Draw guinea pig name HUD if available
         if self.selected_guinea_pig:
             self._draw_guinea_pig_hud(screen)
 
     def check_lose(self):
-        """Check if player touched an enemy."""
         if self.player.player_pos() == self.enemy.enemy_pos():
             print("You Lose!")
             self.running = False
 
     def check_win(self):
-        """Check if all fruits are collected."""
         if self.fruit.all_fruits_collected(self.PACMAN_MAZE):
             print("You Win!")
             self.running = False
 
     def _draw_guinea_pig_hud(self, screen):
-        """Draw HUD showing which guinea pig is playing."""
         try:
             hud_font = pygame.font.SysFont('Arial', 20, bold=True)
         except:
             hud_font = pygame.font.Font(None, 24)
 
-        # Create text
         name = self.selected_guinea_pig.get('name', 'Unknown')
         text = hud_font.render(f"Playing as: {name}", True, GOLD) 
-
-        # Position at top center
         text_rect = text.get_rect()
         text_rect.centerx = self.maze.width // 2
         text_rect.top = 10
 
-        # Draw background box for the text
         bg_rect = text_rect.inflate(20, 10)
         pygame.draw.rect(screen, BLACK, bg_rect, border_radius=5)
         pygame.draw.rect(screen, GOLD, bg_rect, 2, border_radius=5)
-
-        # Draw text
         screen.blit(text, text_rect)

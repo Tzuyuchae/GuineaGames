@@ -1,19 +1,11 @@
 import pygame 
 from minigame.settings import TILE_SIZE, BLUE, BLACK, GREEN, GOLD, RED
-import os # Import os for path handling
+import os 
 
-# Define the path to your images
-# This assumes 'maze.py' is in a 'minigame' folder, 
-# which is inside the 'frontend' folder.
+# --- PATH CONFIGURATION ---
 base_path = os.path.dirname(__file__) 
-
-# Go UP one level from 'minigame' to 'frontend'
-# Then join with 'images'
-image_path = os.path.join(base_path, "../images/") 
-
-# --- If the above path doesn't work, try this ---
-# This assumes 'minigame' and 'images' are both inside 'frontend'
-# image_path = os.path.join(os.path.dirname(base_path), "images")
+# FIX: Point to "frontend/game sprites/mini-game"
+image_path = os.path.join(base_path, "../../frontend/Global Assets/Sprites/Mini-game/")
 
 
 class Maze: 
@@ -36,25 +28,24 @@ class Maze:
         # Map tile characters to their image filenames
         image_map = {
             '1': 'wall.png',
-            '0': 'path.png',
-            '2': 'fruit.png',
-            '3': 'out_of_bounds.png', # Or use 'path.png' if it's just black
-            'X': 'enemy_exit.png',
-            'S': 'enemy_spawn.png'
+            '0': 'floor.png',          # Walkable floor
+            '2': 'fruit.png',          # Fruit/Coin
+            '3': 'out_of_bounds.png',  # The void/black area
+            'X': 'enemy_exit.png',     # Gate for enemies
+            'S': 'enemy_spawn.png'     # Spawn point
         }
         
-        # Fallback colors from your original code
+        # Fallback colors if images are missing
         fallback_colors = {
             '1': BLUE,
             '0': BLACK,
             '2': GOLD, 
-            '3': BLACK,
-            'X': BLACK,
-            'S': BLACK
+            '3': (20, 20, 20), # Dark Gray for out of bounds
+            'X': (100, 100, 100), # Gray for exit
+            'S': (50, 0, 0) # Dark Red for spawn
         }
 
         for tile_char, filename in image_map.items():
-            # This path is now correct
             full_path = os.path.join(image_path, filename) 
             try:
                 # Load the image
@@ -62,15 +53,14 @@ class Maze:
                 # Scale it to TILE_SIZE
                 image = pygame.transform.scale(image, (TILE_SIZE, TILE_SIZE))
                 images[tile_char] = image
-            except FileNotFoundError:
+            except (FileNotFoundError, pygame.error):
                 # If image is missing, create a colored square as a fallback
-                print(f"Warning: Image file not found '{full_path}'. Creating fallback color square.")
+                # We silence the print warning to keep console clean
                 images[tile_char] = pygame.Surface((TILE_SIZE, TILE_SIZE))
                 images[tile_char].fill(fallback_colors.get(tile_char, BLACK))
                 
         return images
 
-    # ... (rest of your Maze class is the same) ...           
     def draw(self, screen):
         """Draw the maze on the given screen using images."""
         for y, row in enumerate(self.layout):
@@ -78,19 +68,31 @@ class Maze:
                 # Calculate the position 
                 rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
                 
-                # Get the correct image for this tile type
+                # 1. Draw Default Background (Black)
+                pygame.draw.rect(screen, BLACK, rect)
+
+                # 2. Get the correct image for this tile type
                 image_to_draw = self.tile_images.get(tile)
                 
                 if image_to_draw:
-                    # Blit (draw) the image onto the screen
                     screen.blit(image_to_draw, rect)
 
-    def is_wall(self, x, y, tile="1"):
-        """Return True when the tile at (x,y) is a wall (or out of bounds)."""
-        if 0 <= y < self.rows and 0 <= x < self.cols:
-            return self.layout[y][x] == tile
-        return True
-    
+    def is_wall(self, x, y):
+        """
+        Return True if the tile at (x,y) is a wall, out of bounds, or an enemy gate.
+        This prevents the player from walking into void or walls.
+        """
+        # Check boundaries first
+        if x < 0 or x >= self.cols or y < 0 or y >= self.rows:
+            return True
+
+        tile = self.layout[y][x]
+        
+        # '1' = Wall
+        # '3' = Out of Bounds (The void)
+        # 'X' = Enemy Gate (Player shouldn't enter)
+        return tile in ['1', '3', 'X']
+
     def is_loop(self, max_x, max_y, grid):
         """Return True when the tile at (x,y) is a loop point."""
         for y in range(self.rows):
