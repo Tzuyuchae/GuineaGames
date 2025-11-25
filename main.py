@@ -4,6 +4,8 @@ import details_page
 import breeding
 import minigame.minigame_page
 import title
+import settings_page
+import help_page
 import random  # --- NEW ---
 
 # --- NEW: Import all your game classes ---
@@ -100,6 +102,16 @@ while running:
         if new_state:
             currentmenu = new_state
 
+    elif currentmenu == 'settings':
+        new_state = settings_page.settings_update(events)
+        if new_state:
+            currentmenu = new_state
+
+    elif currentmenu == 'help':
+        new_state = help_page.help_update(events)
+        if new_state:
+            currentmenu = new_state
+
     # --- NEW: Added the 'gameplay' update logic ---
     elif currentmenu == 'gameplay':
         # Handle player movement
@@ -147,6 +159,12 @@ while running:
 
     elif currentmenu == 'title':
         title.title_draw(screen)
+
+    elif currentmenu == 'settings':
+        settings_page.settings_draw(screen)
+
+    elif currentmenu == 'help':
+        help_page.help_draw(screen)
 
     # --- NEW: Added the 'gameplay' draw logic ---
     elif currentmenu == 'gameplay':
