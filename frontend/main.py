@@ -26,11 +26,22 @@ session.init_session()
 
 current_page = "title"
 
-# --- INITIALIZE PERSISTENT DATA ---
-player_inventory = PlayerInventory(coins=500)
+# --- INITIALIZE PERSISTENT DATA (BACKED BY API WHEN AVAILABLE) ---
+if session.api_available and session.current_user:
+    # Use the logged-in user's actual balance + pets from the backend.
+    player_inventory = PlayerInventory(
+        coins=session.current_user.get("balance", 0)
+    )
+    # Backend returns a list of pet dicts; store them so the UI can use them.
+    player_inventory.owned_pigs = list(session.user_pets)
+else:
+    # Offline / fallback mode – same behavior as before
+    player_inventory = PlayerInventory(coins=500)
+    player_inventory.owned_pigs = []
 
 homescreen_init(screen_width, screen_height)
 store_page.store_init()
+
 
 
 # Add a variable to hold the minigame instance
@@ -59,10 +70,8 @@ while running:
         screen = pygame.display.set_mode((screen_width, screen_height))
         
         next_page = homescreen_update(events)
-        homescreen_draw(screen)
-        
-        # Draw HUD using real inventory data
-        # (Optional: You can eventually link the homescreen sidebar to player_inventory.coins)
+        # Pass the live inventory so the homescreen can show real pets/coins
+        homescreen_draw(screen, player_inventory)
         
         if next_page == "mini_games":
             print("Going to guinea pig selector!")
@@ -85,6 +94,7 @@ while running:
             
         elif next_page:
             print(f"Navigating to {next_page}")
+
 
     # --- GUINEA PIG SELECTOR ---
     elif current_page == "guinea_pig_selector":

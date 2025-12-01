@@ -256,6 +256,10 @@ def homescreen_update(events):
 def homescreen_draw(screen, player_inventory=None):
     global last_inventory_count
 
+    # --- FIX: compute clock inside draw() ---
+    now = datetime.datetime.now()
+    real_clock = now.strftime("%I:%M %p")
+
     # Sync Visuals with Inventory
     if player_inventory:
         current_count = len(player_inventory.owned_pigs)
@@ -321,25 +325,25 @@ def homescreen_draw(screen, player_inventory=None):
     # Sidebar UI
     pygame.draw.rect(screen, PANEL_GRAY, (620, 20, 160, 220))
 
-    # --- FIX: Update Real Clock Here ---
-    real_clock = datetime.datetime.now().strftime("%I:%M %p")
-
-
+    # Pull live stats from inventory if available
     coins = player_inventory.coins if player_inventory else 0
-    food = player_inventory.food if player_inventory else 0
-    
+    food = 0
+    if player_inventory and hasattr(player_inventory, "inventory"):
+        # Count total food items in the inventory dict
+        food = sum(player_inventory.inventory.values())
+
     sidebar_lines = [
         f"Year: {game_time['year']}",
         f"Month: {game_time['month']}",
         f"Day: {game_time['day']}",
         "",
-        f"{real_clock}",
+        f"🕒 {real_clock}",
         "",
-        "Coins: 5",
-        "Food: 5",
+        f"🪙 Coins: {coins}",
+        f"🍎 Food: {food}",
         "",
+        # You can later replace "T1 x19" with something driven by real data
         "T1 x19",
-        f"Pets: {len(visual_pigs)}",
     ]
 
     y = 40

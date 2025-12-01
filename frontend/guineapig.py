@@ -38,20 +38,43 @@ class GuineaPigSprite:
         return self.rect.collidepoint(pos)
 
     def get_stats(self):
-        """Extracts stats from the logical data object for the popup."""
-        # Check if it's a breeding.py object or simple dict
-        name = getattr(self.data, 'name', 'Unknown')
-        speed = getattr(self.data, 'speed', 0)
-        endurance = getattr(self.data, 'endurance', 0)
-        
-        # Handle hunger (logic might be in backend, usually 0-3)
-        # Defaulting to 3 (Full) if not found
-        hunger = getattr(self.data, 'hunger', 3) 
-        
-        # Calculate Age
-        age_val = "Baby"
-        if hasattr(self.data, 'get_age_stage'):
-            age_val = self.data.get_age_stage()
+        """Extracts stats from the logical data object (object OR dict) for the popup."""
+        # Support both backend dicts and local objects
+        if isinstance(self.data, dict):
+            name = self.data.get("name", "Unknown")
+            # If you add genetics later, you can wire speed/endurance from there.
+            speed = self.data.get("speed", 0)
+            endurance = self.data.get("endurance", 0)
+            hunger = self.data.get("hunger", 3)
+            age_val = "Baby"
+            # Example: if backend ever returns age_days, you can map to stages here
+            if "age_days" in self.data:
+                # simple placeholder mapping
+                days = self.data["age_days"]
+                if days > 60:
+                    age_val = "Adult"
+                elif days > 30:
+                    age_val = "Teen"
+        else:
+            # Original object-style access
+            name = getattr(self.data, 'name', 'Unknown')
+            speed = getattr(self.data, 'speed', 0)
+            endurance = getattr(self.data, 'endurance', 0)
+            hunger = getattr(self.data, 'hunger', 3)
+
+            age_val = "Baby"
+            if hasattr(self.data, 'get_age_stage'):
+                age_val = self.data.get_age_stage()
+
+        return {
+            "Name": name,
+            "Speed": speed,
+            "Endurance": endurance,
+            "Hunger": f"{hunger}/3",
+            "Age": age_val,
+            "image_surface": self.image  # Pass image to popup
+        }
+
 
         return {
             "Name": name,
