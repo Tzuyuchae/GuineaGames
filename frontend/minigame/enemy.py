@@ -11,34 +11,45 @@ class Enemy:
         self.seed = seed
         self.color = BLUE
         
-        # Load Image
+        # --- ROBUST IMAGE LOADING ---
         base_path = os.path.dirname(os.path.abspath(__file__))
-        # FIX: Pointing to "frontend/game sprites/mini-game"
-        image_path = os.path.join(base_path, "../../frontend/Global Assets/Sprites/Mini-game/MG_Dragon.png")
-
         
-        try:
-            raw_image = pygame.image.load(image_path).convert_alpha()
-            self.image = pygame.transform.scale(raw_image, (TILE_SIZE, TILE_SIZE))
-        except (FileNotFoundError, pygame.error):
-            # Fallback if image not found
-            print(f"Warning: Enemy image not found at {image_path}")
+        # Check paths for Dragon or fallback Enemy
+        paths_to_check = [
+            os.path.join(base_path, "../Global Assets/Sprites/Mini-game/MG_Dragon.png"),
+            os.path.join(base_path, "../../Global Assets/Sprites/Mini-game/MG_Dragon.png"),
+            os.path.join(base_path, "../images/enemy.png"),
+            os.path.join(base_path, "../../images/enemy.png")
+        ]
+        
+        self.image = None
+        for p in paths_to_check:
+            if os.path.exists(p):
+                try:
+                    raw_image = pygame.image.load(p).convert_alpha()
+                    self.image = pygame.transform.scale(raw_image, (TILE_SIZE, TILE_SIZE))
+                    print(f"Enemy: Loaded sprite from {p}")
+                    break
+                except:
+                    pass
+                    
+        if self.image is None:
+            print("Enemy: Could not find sprite. Using Fallback.")
             self.image = pygame.Surface((TILE_SIZE, TILE_SIZE))
-            self.image.fill(self.color)
+            self.image.fill((255, 0, 0)) # Red Square Fallback
+            # Draw 'E' or eyes for visibility
+            pygame.draw.rect(self.image, (0,0,0), (5, 5, 5, 5))
+            pygame.draw.rect(self.image, (0,0,0), (15, 5, 5, 5))
             
         self.rect = self.image.get_rect()
         
-        # Movement timer (enemies move slower than game FPS)
+        # Movement
         self.move_timer = 0
-        self.move_delay = 20  # Move every 20 frames
+        self.move_delay = 20  
 
     def add_enemies(self, grid):
-        """
-        Randomly places the enemy on an empty spot ('0').
-        CRITICAL: Must return the modified grid!
-        """
         if self.seed is not None:
-            random.seed(self.seed + 1) # Use different seed offset than player
+            random.seed(self.seed + 1) 
             
         spawn_points = []
         for y, row in enumerate(grid):
@@ -46,7 +57,6 @@ class Enemy:
                 if tile == '0':
                     spawn_points.append((x, y))
         
-        # Create a copy to modify
         new_grid = [list(row) for row in grid]
         
         if spawn_points:
@@ -58,7 +68,6 @@ class Enemy:
         return [''.join(row) for row in new_grid]
 
     def move_towards_player(self, player_pos, maze):
-        """Simple AI to move towards the player."""
         self.move_timer += 1
         if self.move_timer < self.move_delay:
             return
@@ -67,28 +76,26 @@ class Enemy:
         px, py = player_pos
         ex, ey = self.pos_x, self.pos_y
         
-        # Simple logic: try to close the gap on X, then Y
         potential_moves = []
+        if ex < px: potential_moves.append((1, 0)) 
+        if ex > px: potential_moves.append((-1, 0)) 
+        if ey < py: potential_moves.append((0, 1)) 
+        if ey > py: potential_moves.append((0, -1)) 
         
-        if ex < px: potential_moves.append((1, 0))  # Right
-        if ex > px: potential_moves.append((-1, 0)) # Left
-        if ey < py: potential_moves.append((0, 1))  # Down
-        if ey > py: potential_moves.append((0, -1)) # Up
-        
-        # Shuffle to make it less predictable if stuck
         random.shuffle(potential_moves)
         
         for dx, dy in potential_moves:
             if not maze.is_wall(ex + dx, ey + dy):
                 self.pos_x += dx
                 self.pos_y += dy
-                return # Moved successfully
+                return
 
     def enemy_pos(self):
         return (self.pos_x, self.pos_y)
 
-    def draw(self, screen):
-        pixel_x = self.pos_x * TILE_SIZE
-        pixel_y = self.pos_y * TILE_SIZE
+    def draw(self, screen, offset_x=0, offset_y=0):
+        """Draw the enemy with centering offset."""
+        pixel_x = self.pos_x * TILE_SIZE + offset_x
+        pixel_y = self.pos_y * TILE_SIZE + offset_y
         self.rect.topleft = (pixel_x, pixel_y)
         screen.blit(self.image, self.rect)

@@ -5,33 +5,23 @@ from minigame.settings import TILE_SIZE, RED
 
 class Player:
     def __init__(self, x=0, y=0, color=RED, seed=None, guinea_pig_data=None):
-        """
-        Initialize the player with stats, color, image, and momentum physics.
-        Args:
-            guinea_pig_data: Dict containing 'name', 'color', 'speed', etc.
-        """
         self.pos_x = x
         self.pos_y = y
         self.seed = seed
         self.guinea_pig_data = guinea_pig_data
         
-        # --- 1. Handle Stats & Color ---
         self.name = guinea_pig_data.get('name', 'Player') if guinea_pig_data else 'Player'
         
-        # Extract Stats (0-100 scale assumed)
+        # Stats
         raw_speed = guinea_pig_data.get('speed', 50) if guinea_pig_data else 50
         raw_endurance = guinea_pig_data.get('endurance', 50) if guinea_pig_data else 50
 
-        # --- MOMENTUM PHYSICS SETTINGS ---
-        # Base delay calculation: Higher speed stat = Lower delay (faster movement)
-        self.BASE_DELAY = 300 - (raw_speed * 1)     # Starting speed
-        self.MIN_DELAY = 120 - (raw_speed * 0.5)    # Max speed cap
-        self.FATIGUE_DELAY = 450                    # Speed when tired
-        
-        # Endurance: How long (ms) you can run at top speed
+        # Physics
+        self.BASE_DELAY = 300 - (raw_speed * 1)
+        self.MIN_DELAY = 120 - (raw_speed * 0.5)
+        self.FATIGUE_DELAY = 450
         self.ENDURANCE_LIMIT = 1000 + (raw_endurance * 40) 
 
-        # Physics State Variables
         self.current_delay = self.BASE_DELAY
         self.last_move_time = 0
         self.momentum_start_time = 0
@@ -39,48 +29,57 @@ class Player:
         self.is_moving = False
         self.is_fatigued = False
 
-        # Set Color from Data
+        # Color
         if guinea_pig_data and 'color' in guinea_pig_data:
             self.color = self._get_color_from_name(guinea_pig_data['color'])
         else:
             self.color = color
 
-        # --- 2. Load Image ---
+        # --- ROBUST IMAGE LOADING ---
         base_path = os.path.dirname(os.path.abspath(__file__))
-        image_path = os.path.join(base_path, "../../frontend/images/player.png")
-
-        try:
-            raw_image = pygame.image.load(image_path).convert_alpha()
-            self.image = pygame.transform.scale(raw_image, (TILE_SIZE, TILE_SIZE))
-            # Note: If you want to tint the actual image based on color, do it here
-        except (FileNotFoundError, pygame.error):
-            # Fallback: Create a colored square if image fails
+        
+        # List of potential paths to check
+        paths_to_check = [
+            os.path.join(base_path, "../images/player.png"),       # If in frontend/minigame/
+            os.path.join(base_path, "../../images/player.png"),    # If in frontend/minigame/Game/
+            os.path.join(base_path, "assets/images/player.png"),   # Local assets
+        ]
+        
+        self.image = None
+        for p in paths_to_check:
+            if os.path.exists(p):
+                try:
+                    raw_image = pygame.image.load(p).convert_alpha()
+                    self.image = pygame.transform.scale(raw_image, (TILE_SIZE, TILE_SIZE))
+                    print(f"Player: Loaded sprite from {p}")
+                    break
+                except Exception as e:
+                    print(f"Player: Error loading {p}: {e}")
+        
+        if self.image is None:
+            print("Player: Could not find sprite. Using Fallback.")
             self.image = pygame.Surface((TILE_SIZE, TILE_SIZE))
-            self.image.fill(self.color)
+            self.image.fill((255, 0, 255)) # Magenta for visibility
+            # Draw a smaller rect inside to look like a player
+            pygame.draw.rect(self.image, self.color, (4, 4, TILE_SIZE-8, TILE_SIZE-8))
 
         self.rect = self.image.get_rect()
 
     def _get_color_from_name(self, color_name):
-        """Convert string color names to RGB tuples."""
         color_map = {
             'brown': (139, 69, 19), 'white': (255, 255, 255),
             'orange': (255, 165, 0), 'black': (50, 50, 50),
             'gray': (128, 128, 128), 'gold': (255, 215, 0), 'red': RED
         }
-        return color_map.get(color_name.lower(), RED)
+        return color_map.get(str(color_name).lower(), RED)
 
     def handle_input(self, maze):
-        """
-        Checks keyboard state and handles momentum-based movement.
-        Call this every frame in game.update().
-        """
         keys = pygame.key.get_pressed()
         now = pygame.time.get_ticks()
         
         dx, dy = 0, 0
         wants_to_move = False
 
-        # Check input (only allows 4-directional movement)
         if keys[pygame.K_UP] or keys[pygame.K_w]:
             dy = -1
             wants_to_move = True
@@ -94,60 +93,45 @@ class Player:
             dx = 1
             wants_to_move = True
 
-        # --- MOMENTUM LOGIC ---
         if wants_to_move:
             if not self.is_moving:
-                # Just started moving
                 self.is_moving = True
                 self.momentum_start_time = now
                 self.current_delay = self.BASE_DELAY
                 self.is_fatigued = False
                 self.at_top_speed_since = 0
 
-            # Calculate Acceleration
             time_moving = now - self.momentum_start_time
             
             if not self.is_fatigued:
-                # Accelerate over time
                 acceleration_bonus = int(time_moving / 200) * 15 
                 target_delay = max(self.MIN_DELAY, self.BASE_DELAY - acceleration_bonus)
                 self.current_delay = target_delay
 
-                # Check Endurance Cap
                 if self.current_delay <= self.MIN_DELAY:
                     if self.at_top_speed_since == 0:
                         self.at_top_speed_since = now
-                    
-                    # If we've been at top speed longer than endurance allows...
                     if (now - self.at_top_speed_since) > self.ENDURANCE_LIMIT:
                         self.is_fatigued = True
             else:
-                # Fatigued State
                 self.current_delay = self.FATIGUE_DELAY
 
-            # Check if it's time to take a step
             if now - self.last_move_time >= self.current_delay:
                 move_success = self.move(dx, dy, maze)
                 self.last_move_time = now
-                
-                # If we hit a wall, kill momentum
                 if not move_success:
                     self.reset_momentum()
-
         else:
-            # Player let go of keys
             if self.is_moving:
                 self.reset_momentum()
 
     def reset_momentum(self):
-        """Resets speed to base values."""
         self.is_moving = False
         self.current_delay = self.BASE_DELAY
         self.at_top_speed_since = 0
         self.is_fatigued = False
 
     def move(self, dx, dy, maze):
-        """Attempts to move. Returns True if moved, False if hit wall."""
         new_x = self.pos_x + dx
         new_y = self.pos_y + dy
         
@@ -158,7 +142,6 @@ class Player:
         return False
 
     def add_player(self, grid):
-        """Randomly add player ('P') to the maze and update coordinates."""
         if self.seed is not None:
             random.seed(self.seed)
         
@@ -181,12 +164,12 @@ class Player:
     def player_pos(self):
         return (self.pos_x, self.pos_y)
 
-    def draw(self, screen):
-        pixel_x = self.pos_x * TILE_SIZE
-        pixel_y = self.pos_y * TILE_SIZE
+    def draw(self, screen, offset_x=0, offset_y=0):
+        """Draw player with centering offset."""
+        pixel_x = self.pos_x * TILE_SIZE + offset_x
+        pixel_y = self.pos_y * TILE_SIZE + offset_y
         self.rect.topleft = (pixel_x, pixel_y)
         
-        # Visual indicator for Fatigue (Tint red)
         if self.is_fatigued:
             tinted_img = self.image.copy()
             tinted_img.fill((100, 0, 0, 100), special_flags=pygame.BLEND_RGBA_MULT)

@@ -117,10 +117,10 @@ class Maze:
             mask += 8
         return mask
 
-    def draw(self, screen):
+    def draw(self, screen, offset_x=0, offset_y=0):
         for y, row in enumerate(self.layout):
             for x, tile in enumerate(row):
-                dest = (x * TILE_SIZE, y * TILE_SIZE)
+                dest = (x * TILE_SIZE + offset_x, y * TILE_SIZE + offset_y)
                 
                 # 1. Draw Floor (except void)
                 if tile != '3' and tile != 'X' and tile != 'S': 
