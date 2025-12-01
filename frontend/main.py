@@ -1,18 +1,18 @@
-import session  # NEW - backend/player session state
+import session  # backend/player session state
 
 import pygame
 pygame.init()
 
-from guineapig import Guineapig
 from title import title_update, title_draw
 from homescreen import homescreen_init, homescreen_update, homescreen_draw
 
 # --- NEW IMPORTS ---
-from minigame.game import Game 
-import store_page                 # <--- Just import the file name
+from minigame.game import Game
+from minigame.guinea_pig_selector import GuineaPigSelector
+import store_page                 # store page UI
 from store_module import PlayerInventory
 
-# Original screen size
+
 screen_width = 800
 screen_height = 600
 screen = pygame.display.set_mode((screen_width, screen_height))
@@ -27,16 +27,16 @@ session.init_session()
 current_page = "title"
 
 # --- INITIALIZE PERSISTENT DATA ---
-# We create the inventory HERE so it survives between page changes
-# Giving the player 500 coins to start so you can test buying things
-player_inventory = PlayerInventory(coins=500) 
+player_inventory = PlayerInventory(coins=500)
 
-# Initialize pages
-homescreen_init()
-store_page.store_init() # Init fonts for store
+homescreen_init(screen_width, screen_height)
+store_page.store_init()
+
 
 # Add a variable to hold the minigame instance
 active_minigame = None
+guinea_pig_selector = None
+
 
 running = True 
 while running:
@@ -65,17 +65,65 @@ while running:
         # (Optional: You can eventually link the homescreen sidebar to player_inventory.coins)
         
         if next_page == "mini_games":
-            print("Starting minigame!")
-            active_minigame = Game()
-            screen = pygame.display.set_mode((active_minigame.maze.width, active_minigame.maze.height))
-            current_page = "minigame"
-            
-        elif next_page == "store": # <--- THIS CATCHES THE CLICK FROM HOMESCREEN
+            print("Going to guinea pig selector!")
+
+            # Choose the user ID from the current backend session
+            user_id = 1
+            if session.current_user is not None:
+                user_id = session.current_user["id"]
+
+            guinea_pig_selector = GuineaPigSelector(
+                screen_width=screen_width,
+                screen_height=screen_height,
+                user_id=user_id,
+            )
+            current_page = "guinea_pig_selector"
+
+        elif next_page == "store":  # <--- THIS CATCHES THE CLICK FROM HOMESCREEN
             print("Going to Store...")
             current_page = "store"
             
         elif next_page:
             print(f"Navigating to {next_page}")
+
+    # --- GUINEA PIG SELECTOR ---
+    elif current_page == "guinea_pig_selector":
+        # If somehow not initialized, create it now
+        if guinea_pig_selector is None:
+            user_id = 1
+            if session.current_user is not None:
+                user_id = session.current_user["id"]
+
+            guinea_pig_selector = GuineaPigSelector(
+                screen_width=screen_width,
+                screen_height=screen_height,
+                user_id=user_id,
+            )
+
+        # Update selector (handle clicks, selections, scrolling)
+        result = guinea_pig_selector.update(events)
+        # Draw selector
+        guinea_pig_selector.draw(screen)
+
+        # Navigation based on selector result
+        if result == "back":
+            current_page = "homescreen"
+            guinea_pig_selector = None
+
+        elif isinstance(result, tuple) and result[0] == "start_game":
+            selected_guinea_pig = result[1]
+            print(f"Starting minigame with guinea pig: {selected_guinea_pig.get('name')}")
+
+            active_minigame = Game(selected_guinea_pig=selected_guinea_pig)
+
+            # Resize the window to match maze dimensions
+            screen = pygame.display.set_mode(
+                (active_minigame.maze.width, active_minigame.maze.height)
+            )
+
+            current_page = "minigame"
+            guinea_pig_selector = None
+
 
     # --- MINIGAME ---
     elif current_page == "minigame":

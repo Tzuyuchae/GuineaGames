@@ -257,13 +257,13 @@ class APIClient:
         Returns:
             List of pet dictionaries
         """
-        return self._get(f"/pets/user/{user_id}")
+        return self._get(f"/pets/owner/{user_id}")
 
     def get_pet(self, pet_id: int) -> Dict[str, Any]:
         """
         Get a specific pet by ID.
 
-        Args:
+        Args:z
             pet_id: ID of the pet
 
         Returns:

@@ -27,7 +27,13 @@ from typing import Optional, List, Dict, Any
 
 # We import the API client you already validated with test_api_connection.py.
 # WHY: This keeps ALL backend I/O in one place instead of spreading it in UI code.
-from frontend.api_client import api
+# The try/except makes this work whether you run:
+#   - `python main.py` from inside the frontend folder, or
+#   - import `frontend` as a package from the project root.
+try:
+    from api_client import api  # running from frontend/ directory
+except ImportError:
+    from frontend.api_client import api  # running from project root as a package
 
 
 # ---- SESSION STATE ----
@@ -38,7 +44,7 @@ api_available: bool = False     # Whether the backend responded successfully
 api_status: str = "Not initialized"  # Human-readable status for UI display
 
 current_user: Optional[Dict[str, Any]] = None   # dict returned by /users/{id}
-user_pets: List[Dict[str, Any]] = []            # list returned by /pets/by_user/{id}
+user_pets: List[Dict[str, Any]] = []            # list returned by /pets/owner/{id}
 
 
 # =====================================================================

@@ -15,6 +15,20 @@ from minigame.fruits import Fruit
 base_path = os.path.dirname(__file__)
 assets_path = os.path.join(base_path, "../../assets/audio/")
 
+# Optional: API + session for logging rewards to the backend
+try:
+    from api_client import api
+    API_AVAILABLE = True
+except ImportError:
+    API_AVAILABLE = False
+    print("API client not available in minigame; running without backend rewards.")
+
+try:
+    import session
+except ImportError:
+    session = None
+
+
 class Game: 
     def __init__(self, selected_guinea_pig=None): 
         """
@@ -96,6 +110,29 @@ class Game:
             self.PACMAN_MAZE = self.fruit.if_collected(
                 (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
             )
+
+        # If the game has ended (back button, win, or lose), go back to homescreen
+        if not self.running:
+            # Optionally: log a simple minigame reward to the backend
+            if API_AVAILABLE and session is not None and getattr(session, "api_available", False):
+                current_user = session.current_user
+                if current_user is not None:
+                    try:
+                        api.create_transaction(
+                            user_id=current_user["id"],
+                            transaction_type="minigame_reward",
+                            amount=10,  # flat reward for now
+                            description="Reward for playing the maze minigame",
+                        )
+                        # Refresh user so any coin balance changes are visible later
+                        session.refresh_user()
+                    except Exception as e:
+                        print(f"Could not save minigame reward: {e}")
+
+            return "homescreen"
+
+        # Otherwise, keep playing
+        return None
 
             
     def draw(self, screen):

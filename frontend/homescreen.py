@@ -253,7 +253,6 @@ def homescreen_update(events):
 #  DRAW
 # ----------------------------------------------------------
 
-def homescreen_draw(screen):
 def homescreen_draw(screen, player_inventory=None):
     global last_inventory_count
 
@@ -286,8 +285,8 @@ def homescreen_draw(screen, player_inventory=None):
 
         if hovering:
         
-        # Only calculate expensive mask collision if popup is NOT showing
-        hovering = False
+            # Only calculate expensive mask collision if popup is NOT showing
+            hovering = False
         if not show_popup:
             lx = mouse_pos[0] - rect.x
             ly = mouse_pos[1] - rect.y
