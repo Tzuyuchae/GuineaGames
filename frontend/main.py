@@ -1,3 +1,5 @@
+import session  # NEW - backend/player session state
+
 import pygame
 pygame.init()
 
@@ -18,6 +20,10 @@ pygame.display.set_caption("Guinea Games")
 
 clock = pygame.time.Clock()
 FPS = 60
+
+# Initialize backend session (connect to API, load/create user, load pets)
+session.init_session()
+
 current_page = "title"
 
 # --- INITIALIZE PERSISTENT DATA ---
