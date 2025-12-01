@@ -1,100 +1,154 @@
-import pygame 
-from minigame.settings import TILE_SIZE, BLUE, BLACK, GREEN, GOLD, RED
-import os 
+import pygame
+import os
+from minigame.settings import TILE_SIZE, BLACK
 
-# --- PATH CONFIGURATION ---
-base_path = os.path.dirname(__file__) 
-# FIX: Point to "frontend/game sprites/mini-game"
-image_path = os.path.join(base_path, "../../frontend/Global Assets/Sprites/Mini-game/")
-
-
-class Maze: 
+class Maze:
     def __init__(self, layout):
         self.layout = layout
         self.rows = len(layout)
         self.cols = len(layout[0])
         self.width = self.cols * TILE_SIZE
         self.height = self.rows * TILE_SIZE
-        
-        # Load all tile images into a dictionary
-        self.tile_images = self.load_images()
 
-    def load_images(self):
-        """
-        Loads all images for the maze tiles and scales them.
-        Returns a dictionary mapping tile characters to pygame.Surface objects.
-        """
-        images = {}
-        # Map tile characters to their image filenames
-        image_map = {
-            '1': 'wall.png',
-            '0': 'floor.png',          # Walkable floor
-            '2': 'fruit.png',          # Fruit/Coin
-            '3': 'out_of_bounds.png',  # The void/black area
-            'X': 'enemy_exit.png',     # Gate for enemies
-            'S': 'enemy_spawn.png'     # Spawn point
-        }
+        # --- PATH FINDING LOGIC ---
+        current_dir = os.path.dirname(os.path.abspath(__file__))
         
-        # Fallback colors if images are missing
-        fallback_colors = {
-            '1': BLUE,
-            '0': BLACK,
-            '2': GOLD, 
-            '3': (20, 20, 20), # Dark Gray for out of bounds
-            'X': (100, 100, 100), # Gray for exit
-            'S': (50, 0, 0) # Dark Red for spawn
+        # Try to locate the Tileset folder automatically
+        path_a = os.path.join(current_dir, "../Global Assets/Sprites/Maze/Tileset/")
+        path_b = os.path.join(current_dir, "../../Global Assets/Sprites/Maze/Tileset/")
+        
+        if os.path.exists(path_a):
+            self.image_path = path_a
+        elif os.path.exists(path_b):
+            self.image_path = path_b
+        else:
+            # Fallback
+            self.image_path = path_a
+            print(f"Maze Warning: Tile directory not found at {path_a}")
+
+        # 1. Load the wall tiles dictionary
+        self.wall_tiles = self.load_wall_tiles()
+        
+        # 2. Load floor (User specified 000 is floor)
+        self.floor_img = self._load_single_image("maze_tileset_000.png")
+        
+        # 3. Pre-calculate masks
+        self.wall_masks = self._calculate_all_masks()
+
+    def _load_single_image(self, filename):
+        """Helper to load and scale a single image."""
+        full_path = os.path.join(self.image_path, filename)
+        try:
+            img = pygame.image.load(full_path).convert_alpha()
+            return pygame.transform.scale(img, (TILE_SIZE, TILE_SIZE))
+        except (FileNotFoundError, pygame.error):
+            # Fallback: Magenta square for debugging missing files
+            surf = pygame.Surface((TILE_SIZE, TILE_SIZE))
+            surf.fill((255, 0, 255)) 
+            return surf
+
+    def load_wall_tiles(self):
+        """
+        Loads the correct images based on your provided mapping.
+        Missing T-Junctions/Crosses are mapped to the 'Isolated' tile (001)
+        to prevent holes in the maze.
+        """
+        tiles = {}
+        
+        # The 'Solid' fallback tile for missing intersections
+        # Using "001" (Isolated Pillar) as it's a safe solid block
+        FALLBACK_TILE = "maze_tileset_001.png"
+
+        mapping = {
+            # --- ISOLATED ---
+            0:  "maze_tileset_001.png", 
+
+            # --- END PIECES (Dead Ends) ---
+            1:  "maze_tileset_016.png", # North
+            2:  "maze_tileset_017.png", # South
+            4:  "maze_tileset_014.png", # East
+            8:  "maze_tileset_015.png", # West
+
+            # --- STRAIGHT LINES ---
+            3:  "maze_tileset_008.png", # Vertical
+            12: "maze_tileset_009.png", # Horizontal
+
+            # --- CORNERS ---
+            5:  "maze_tileset_012.png", # Top-Right
+            9:  "maze_tileset_013.png", # Top-Left
+            6:  "maze_tileset_010.png", # Bottom-Right
+            10: "maze_tileset_011.png", # Bottom-Left
+
+            # --- MISSING INTERSECTIONS (Mapped to Fallback) ---
+            7:  FALLBACK_TILE, # T-Right
+            11: FALLBACK_TILE, # T-Left
+            13: FALLBACK_TILE, # T-Up
+            14: FALLBACK_TILE, # T-Down
+            15: FALLBACK_TILE  # Cross
         }
 
-        for tile_char, filename in image_map.items():
-            full_path = os.path.join(image_path, filename) 
-            try:
-                # Load the image
-                image = pygame.image.load(full_path).convert_alpha()
-                # Scale it to TILE_SIZE
-                image = pygame.transform.scale(image, (TILE_SIZE, TILE_SIZE))
-                images[tile_char] = image
-            except (FileNotFoundError, pygame.error):
-                # If image is missing, create a colored square as a fallback
-                # We silence the print warning to keep console clean
-                images[tile_char] = pygame.Surface((TILE_SIZE, TILE_SIZE))
-                images[tile_char].fill(fallback_colors.get(tile_char, BLACK))
+        for mask_id, filename in mapping.items():
+            tiles[mask_id] = self._load_single_image(filename)
                 
-        return images
+        return tiles
 
-    def draw(self, screen):
-        """Draw the maze on the given screen using images."""
+    def _calculate_all_masks(self):
+        masks = {}
         for y, row in enumerate(self.layout):
             for x, tile in enumerate(row):
-                # Calculate the position 
-                rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                
-                # 1. Draw Default Background (Black)
-                pygame.draw.rect(screen, BLACK, rect)
+                if tile == '1':
+                    masks[(x, y)] = self.calculate_mask(x, y)
+        return masks
 
-                # 2. Get the correct image for this tile type
-                image_to_draw = self.tile_images.get(tile)
+    def calculate_mask(self, x, y):
+        """Calculates the 4-bit number based on neighbors."""
+        mask = 0
+        # Check North
+        if y > 0 and self.layout[y-1][x] == '1':
+            mask += 1
+        # Check South
+        if y < self.rows - 1 and self.layout[y+1][x] == '1':
+            mask += 2
+        # Check East
+        if x < self.cols - 1 and self.layout[y][x+1] == '1':
+            mask += 4
+        # Check West
+        if x > 0 and self.layout[y][x-1] == '1':
+            mask += 8
+        return mask
+
+    def draw(self, screen):
+        for y, row in enumerate(self.layout):
+            for x, tile in enumerate(row):
+                dest = (x * TILE_SIZE, y * TILE_SIZE)
                 
-                if image_to_draw:
-                    screen.blit(image_to_draw, rect)
+                # 1. Draw Floor (except void)
+                if tile != '3' and tile != 'X' and tile != 'S': 
+                    if self.floor_img:
+                        screen.blit(self.floor_img, dest)
+                    else:
+                        pygame.draw.rect(screen, (20, 20, 30), (*dest, TILE_SIZE, TILE_SIZE))
+
+                # 2. Draw Walls
+                if tile == '1':
+                    mask = self.wall_masks.get((x, y), 0)
+                    image = self.wall_tiles.get(mask)
+                    if image:
+                        screen.blit(image, dest)
+                    else:
+                        # Absolute fallback if even the mapping fails
+                        pygame.draw.rect(screen, (100, 100, 255), (*dest, TILE_SIZE, TILE_SIZE))
+                
+                # 3. Draw Void/Spawns
+                elif tile == '3' or tile == 'X' or tile == 'S':
+                    pygame.draw.rect(screen, BLACK, (*dest, TILE_SIZE, TILE_SIZE))
 
     def is_wall(self, x, y):
-        """
-        Return True if the tile at (x,y) is a wall, out of bounds, or an enemy gate.
-        This prevents the player from walking into void or walls.
-        """
-        # Check boundaries first
         if x < 0 or x >= self.cols or y < 0 or y >= self.rows:
             return True
-
-        tile = self.layout[y][x]
-        
-        # '1' = Wall
-        # '3' = Out of Bounds (The void)
-        # 'X' = Enemy Gate (Player shouldn't enter)
-        return tile in ['1', '3', 'X']
+        return self.layout[y][x] in ['1', '3', 'X']
 
     def is_loop(self, max_x, max_y, grid):
-        """Return True when the tile at (x,y) is a loop point."""
         for y in range(self.rows):
             for x in range(self.cols):
                 if x == max_x and y == max_y:

@@ -30,8 +30,8 @@ last_update = 0
 # --- Popup State ---
 show_popup = False
 popup_manager = None
-visual_pigs = [] # List of GuineaPigSprite objects
-last_inventory_count = -1 # To detect when to refresh sprites
+visual_pigs = [] 
+last_inventory_count = -1 
 
 def make_glow(mask, intensity=22):
     """Soft, translucent Stardew-style glow."""
@@ -56,7 +56,6 @@ def homescreen_init(screen_w, screen_h):
     font = pygame.font.Font(None, 40)
     sidebar_font = pygame.font.Font(None, 26)
     
-    # Initialize the popup manager
     popup_manager = DetailsPopup()
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -69,7 +68,6 @@ def homescreen_init(screen_w, screen_h):
         raw_bg.fill((100, 100, 200)) 
 
     raw_w, raw_h = raw_bg.get_width(), raw_bg.get_height()
-    # Scale background to fill height
     scale = screen_h / raw_h
     new_w = int(raw_w * scale)
     new_h = int(raw_h * scale)
@@ -77,7 +75,6 @@ def homescreen_init(screen_w, screen_h):
     background = pygame.transform.scale(raw_bg, (new_w, new_h))
     BG_POS = ((screen_w - new_w) // 2, 0)
 
-    # Defined areas for buildings
     houses_original = {
         "home":       (132, 83, 215, 232),
         "mini_games": (348, 331, 202, 215),
@@ -88,7 +85,6 @@ def homescreen_init(screen_w, screen_h):
 
     house_data = {}
     for name, (ox, oy, ow, oh) in houses_original.items():
-        # Extract sub-image from original BG for glowing effect
         house_img = raw_bg.subsurface(pygame.Rect(ox, oy, ow, oh)).copy()
         sw, sh = int(ow * scale), int(oh * scale)
         house_img = pygame.transform.scale(house_img, (sw, sh))
@@ -100,34 +96,59 @@ def homescreen_init(screen_w, screen_h):
         house_data[name] = {"rect": pygame.Rect(sx, sy, sw, sh), "img": house_img, "mask": mask, "glow": glow}
 
 def refresh_visual_pigs(inventory_list):
-    """Rebuilds the list of visual sprites based on inventory data."""
-    global visual_pigs
+    """
+    Rebuilds the list of visual sprites based on inventory data.
+    Ensures pigs do not spawn on top of buildings.
+    """
+    global visual_pigs, house_data
     visual_pigs = []
     
-    # Define boundaries for the "Yard" where pigs can walk
-    yard_min_x, yard_max_x = 50, 600
-    yard_min_y, yard_max_y = 400, 800
+    # Use mostly the bottom-right area of the screen to avoid the top houses
+    yard_min_x, yard_max_x = 50, 650
+    yard_min_y, yard_max_y = 300, 800
     
     for pig_data in inventory_list:
-        # Random position in the yard
-        rx = random.randint(yard_min_x, yard_max_x)
-        ry = random.randint(yard_min_y, yard_max_y)
+        valid_spot = False
+        attempts = 0
+        
+        # Try up to 20 times to find a spot not on a building
+        while not valid_spot and attempts < 20:
+            rx = random.randint(yard_min_x, yard_max_x)
+            ry = random.randint(yard_min_y, yard_max_y)
+            
+            # Create a rect for the potential pig (approx 60x60)
+            # Note: Sprite uses bottomleft=(rx, ry), so the rect goes UP from ry
+            potential_rect = pygame.Rect(rx, ry - 60, 60, 60)
+            
+            collision = False
+            for house_info in house_data.values():
+                # Inflate house rect slightly so they don't even touch the edges
+                if potential_rect.colliderect(house_info["rect"].inflate(10, 10)):
+                    collision = True
+                    break
+            
+            if not collision:
+                valid_spot = True
+            
+            attempts += 1
+            
+        # If we failed to find a spot, put them in a default safe corner (bottom right)
+        if not valid_spot:
+            rx, ry = 600, 800
+
         sprite = GuineaPigSprite(rx, ry, pig_data)
         visual_pigs.append(sprite)
 
 def homescreen_update(events):
     global last_update, game_time, show_popup, selected_pig_stats
 
-    # --- Handle Popup Events First ---
     if show_popup:
         for event in events:
             action = popup_manager.handle_event(event)
             if action == "close":
                 show_popup = False
-        # Block other inputs while popup is open
         return None
 
-    # --- Time system ---
     now = time.time()
     if last_update == 0: last_update = now
 
@@ -152,13 +173,12 @@ def homescreen_update(events):
             
             # 1. Check Guinea Pig Clicks
             clicked_pig = False
-            # Iterate in reverse so we click the one "on top"
             for sprite in reversed(visual_pigs):
                 if sprite.is_clicked(mouse_pos):
                     selected_pig_stats = sprite.get_stats()
                     show_popup = True
                     clicked_pig = True
-                    break # Stop checking
+                    break 
             
             if clicked_pig:
                 return None
@@ -177,7 +197,6 @@ def homescreen_update(events):
 def homescreen_draw(screen, player_inventory=None):
     global last_inventory_count
 
-    # Sync Visuals with Inventory
     if player_inventory:
         current_count = len(player_inventory.owned_pigs)
         if current_count != last_inventory_count:
@@ -188,13 +207,11 @@ def homescreen_draw(screen, player_inventory=None):
     screen.blit(background, BG_POS)
     mouse_pos = pygame.mouse.get_pos()
 
-    # Draw Buildings & Glow
     for name, data in house_data.items():
         rect = data["rect"]
         mask = data["mask"]
         glow = data["glow"]
         
-        # Only calculate expensive mask collision if popup is NOT showing
         hovering = False
         if not show_popup:
             lx = mouse_pos[0] - rect.x
@@ -210,13 +227,10 @@ def homescreen_draw(screen, player_inventory=None):
             if clipped.width > 0 and clipped.height > 0:
                 screen.blit(glow, clipped.topleft, pygame.Rect(clipped.x - gx, clipped.y - gy, clipped.width, clipped.height))
 
-    # --- NEW: Draw Guinea Pigs ---
-    # Sort by Y position so lower pigs appear in front of higher pigs (2.5D effect)
     visual_pigs.sort(key=lambda p: p.rect.centery)
     for sprite in visual_pigs:
         sprite.draw(screen)
 
-    # Sidebar UI
     w, h = screen.get_size()
     pygame.draw.rect(screen, PANEL_GRAY, (w - 180, 20, 160, 220))
     real_clock = datetime.datetime.now().strftime("%I:%M %p")
@@ -243,13 +257,10 @@ def homescreen_draw(screen, player_inventory=None):
         screen.blit(text_surface, (w - 170, y))
         y += 20
 
-    # --- NEW: Draw Popup Overlay ---
     if show_popup and popup_manager and selected_pig_stats:
-        # Darken background
         overlay = pygame.Surface((w, h))
         overlay.set_alpha(128)
         overlay.fill((0, 0, 0))
         screen.blit(overlay, (0, 0))
         
-        # Draw popup content
         popup_manager.draw(screen, selected_pig_stats)
