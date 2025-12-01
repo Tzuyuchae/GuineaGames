@@ -2,7 +2,7 @@ import pygame
 import random
 from datetime import datetime, timedelta
 
-# --- CONSTANTS & COLORS ---
+# --- CONSTANTS ---
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GRAY = (200, 200, 200)
@@ -12,8 +12,6 @@ RED = (178, 34, 34)
 GOLD = (255, 215, 0)
 BLUE = (70, 130, 180)
 
-# --- 1. LOGIC CLASSES ---
-
 class GuineaPig:
     def __init__(self, name, genes=None, birth_time=None, score=None):
         self.id = f"gp{random.randint(1000, 9999)}"
@@ -21,11 +19,9 @@ class GuineaPig:
         self.birth_time = birth_time or datetime.now()
         self.last_bred_time = None
         
-        # Stats
         self.speed = random.randint(40, 90)
         self.endurance = random.randint(40, 90)
         
-        # Calculate Score based on stats (Higher stats = Higher Value)
         base_score = score if score else random.randint(50, 150)
         self.score = base_score + int((self.speed + self.endurance) * 0.5)
 
@@ -48,6 +44,7 @@ class GuineaPig:
         return alleles
 
     def calculate_phenotype(self):
+        # Simplified for brevity, same as before
         p = {}
         p['coat_color'] = 'Brown' if 'B' in self.genes['coat_color'] else 'Black'
         p['coat_length'] = 'Short' if 'S' in self.genes['coat_length'] else 'Long'
@@ -58,85 +55,99 @@ class GuineaPig:
 
     def get_age_stage(self):
         age = datetime.now() - self.birth_time
-        # Babies mature in 1 minute (real time)
         maturity_time = timedelta(minutes=1) 
         return 'Adult' if age >= maturity_time else 'Baby'
         
     def force_adult(self):
-        """Dev Tool: Instantly makes the pig an adult."""
         self.birth_time = datetime.now() - timedelta(minutes=5)
 
     def calculate_sell_price(self):
-        """Calculates sell price based on age and stats."""
-        if self.get_age_stage() == 'Baby':
-            return 0 # Cannot sell babies
-        
-        # Base value + stat multiplier
-        # E.g. 100 + (60 + 70) = 230 coins
+        if self.get_age_stage() == 'Baby': return 0
         return self.score + (self.speed + self.endurance)
 
     def can_breed(self):
-        if self.get_age_stage() == 'Baby':
-            return False, "Too Young"
-        if self.last_bred_time is None:
-            return True, "Ready"
+        if self.get_age_stage() == 'Baby': return False, "Too Young"
+        if self.last_bred_time is None: return True, "Ready"
         
         cooldown = timedelta(minutes=5)
         time_since_breed = datetime.now() - self.last_bred_time
 
         if time_since_breed < cooldown:
-            remaining = cooldown - time_since_breed
-            mins = int(remaining.total_seconds() / 60)
-            secs = int(remaining.total_seconds() % 60) 
-            return False, f"Wait {mins}m {secs}s"
+            rem = cooldown - time_since_breed
+            return False, f"Wait {int(rem.total_seconds()/60)}m"
         return True, "Ready"
-
-# --- 2. PAGE MANAGER ---
 
 class BreedingPage:
     def __init__(self):
+        # Selection State
         self.parent1 = None
         self.parent2 = None
         self.message = "Select two parents to breed."
         self.message_color = WHITE
         
+        # Rects
         self.back_btn_rect = pygame.Rect(20, 20, 100, 40)
         self.breed_btn_rect = pygame.Rect(380, 600, 200, 60)
         self.p1_slot_rect = pygame.Rect(360, 150, 240, 150)
         self.p2_slot_rect = pygame.Rect(360, 350, 240, 150)
         
+        # Naming Phase State
+        self.naming_mode = False
+        self.temp_babies = []
+        self.current_baby_idx = 0
+        self.input_name = ""
+        
+        # Fonts
         self.title_font = None
         self.text_font = None
-        self.small_font = None
 
-    def handle_click(self, pos, player_inventory):
-        x, y = pos
-        
-        if self.back_btn_rect.collidepoint(pos):
-            return 'homescreen'
-            
-        if self.p1_slot_rect.collidepoint(pos):
-            self.parent1 = None
-            self.message = "Parent 1 removed."
-        if self.p2_slot_rect.collidepoint(pos):
-            self.parent2 = None
-            self.message = "Parent 2 removed."
+    def handle_input(self, events, player_inventory):
+        # Init fonts if needed
+        if not self.title_font:
+            self.title_font = pygame.font.SysFont("Arial", 30, bold=True)
+            self.text_font = pygame.font.SysFont("Arial", 18)
 
-        list_start_y = 100
-        item_height = 80
-        owned_pigs = player_inventory.owned_pigs
-        
-        for i, pig in enumerate(owned_pigs):
-            pig_y = list_start_y + (i * (item_height + 5))
-            if pig_y > 800: break 
+        for event in events:
+            # --- NAMING PHASE INPUT ---
+            if self.naming_mode:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        self._confirm_baby_name(player_inventory)
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.input_name = self.input_name[:-1]
+                    else:
+                        if len(self.input_name) < 12:
+                            self.input_name += event.unicode
+                return None # Block other inputs
 
-            pig_rect = pygame.Rect(20, pig_y, 300, item_height)
-            if pig_rect.collidepoint(pos):
-                self._assign_parent(pig)
+            # --- NORMAL PHASE INPUT ---
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                pos = event.pos
                 
-        if self.breed_btn_rect.collidepoint(pos):
-            self._attempt_breed(player_inventory)
+                if self.back_btn_rect.collidepoint(pos):
+                    return 'homescreen'
+                    
+                if self.p1_slot_rect.collidepoint(pos):
+                    self.parent1 = None
+                    self.message = "Parent 1 removed."
+                if self.p2_slot_rect.collidepoint(pos):
+                    self.parent2 = None
+                    self.message = "Parent 2 removed."
 
+                if self.breed_btn_rect.collidepoint(pos):
+                    self._attempt_breed()
+
+                # Check inventory clicks
+                list_start_y = 100
+                item_height = 80
+                for i, pig in enumerate(player_inventory.owned_pigs):
+                    pig_y = list_start_y + (i * (item_height + 5))
+                    if pig_y > 800: break 
+                    
+                    pig_rect = pygame.Rect(20, pig_y, 300, item_height)
+                    if pig_rect.collidepoint(pos):
+                        self._assign_parent(pig)
+                        
         return None
 
     def _assign_parent(self, pig):
@@ -147,31 +158,30 @@ class BreedingPage:
             return
 
         if self.parent1 is None:
-            if pig == self.parent2:
-                self.message = "Already selected as Parent 2!"
+            if pig == self.parent2: self.message = "Already selected!"
             else:
                 self.parent1 = pig
-                self.message = f"Selected {pig.name} as Parent 1."
+                self.message = f"Selected {pig.name}"
                 self.message_color = WHITE
         elif self.parent2 is None:
-            if pig == self.parent1:
-                self.message = "Already selected as Parent 1!"
+            if pig == self.parent1: self.message = "Already selected!"
             else:
                 self.parent2 = pig
-                self.message = f"Selected {pig.name} as Parent 2."
+                self.message = f"Selected {pig.name}"
                 self.message_color = WHITE
         else:
-            self.message = "Slots full! Click a slot to clear it."
-            self.message_color = GOLD
+            self.message = "Slots full! Click slot to remove."
 
-    def _attempt_breed(self, player_inventory):
+    def _attempt_breed(self):
         if not self.parent1 or not self.parent2:
             self.message = "Need two parents!"
             self.message_color = RED
             return
             
+        # Generate Data but DO NOT add to inventory yet
         num_babies = random.randint(1, 3)
-        new_babies = []
+        self.temp_babies = []
+        
         for i in range(num_babies):
             baby_genes = {}
             for trait in self.parent1.genes:
@@ -179,116 +189,142 @@ class BreedingPage:
                 g2 = random.choice(self.parent2.genes[trait])
                 baby_genes[trait] = sorted([g1, g2], reverse=True)
             
-            name = f"Baby_{random.randint(100,999)}"
-            baby = GuineaPig(name, genes=baby_genes, birth_time=datetime.now())
-            new_babies.append(baby)
+            # Create pig with placeholder name
+            baby = GuineaPig("", genes=baby_genes, birth_time=datetime.now())
+            self.temp_babies.append(baby)
             
+        # Enter Naming Mode
+        self.naming_mode = True
+        self.current_baby_idx = 0
+        self.input_name = ""
         self.parent1.last_bred_time = datetime.now()
         self.parent2.last_bred_time = datetime.now()
+
+    def _confirm_baby_name(self, player_inventory):
+        name = self.input_name.strip()
+        if not name: name = f"Baby_{random.randint(100,999)}"
         
-        player_inventory.owned_pigs.extend(new_babies)
+        # Set Name
+        self.temp_babies[self.current_baby_idx].name = name
         
-        self.parent1 = None
-        self.parent2 = None
+        # Move to next baby or Finish
+        self.current_baby_idx += 1
+        self.input_name = ""
         
-        self.message = f"Success! {num_babies} new babies born!"
-        self.message_color = GREEN
+        if self.current_baby_idx >= len(self.temp_babies):
+            # All named, finish up
+            player_inventory.owned_pigs.extend(self.temp_babies)
+            self.message = f"Success! {len(self.temp_babies)} babies born!"
+            self.message_color = GREEN
+            self.naming_mode = False
+            self.parent1 = None
+            self.parent2 = None
+            self.temp_babies = []
 
     def draw(self, screen, player_inventory):
         if not self.title_font:
             self.title_font = pygame.font.SysFont("Arial", 30, bold=True)
             self.text_font = pygame.font.SysFont("Arial", 18)
-            self.small_font = pygame.font.SysFont("Arial", 14)
 
+        # If Naming, draw naming overlay
+        if self.naming_mode:
+            self._draw_naming_overlay(screen)
+            return
+
+        # --- Normal Draw Code ---
         screen.fill((40, 40, 50))
-
         title_surf = self.title_font.render("Breeding Center", True, GOLD)
         screen.blit(title_surf, (screen.get_width()//2 - title_surf.get_width()//2, 20))
 
         pygame.draw.rect(screen, RED, self.back_btn_rect, border_radius=5)
-        back_text = self.text_font.render("BACK", True, WHITE)
-        screen.blit(back_text, (self.back_btn_rect.x + 25, self.back_btn_rect.y + 10))
+        screen.blit(self.text_font.render("BACK", True, WHITE), (45, 30))
 
         msg_surf = self.text_font.render(self.message, True, self.message_color)
         screen.blit(msg_surf, (20, 70))
 
+        # Draw Inventory List
         list_start_y = 100
         item_height = 80
-        owned_pigs = player_inventory.owned_pigs
-        
-        if not owned_pigs:
-            empty_txt = self.text_font.render("No Guinea Pigs owned!", True, GRAY)
-            screen.blit(empty_txt, (50, 200))
-
-        for i, pig in enumerate(owned_pigs):
+        for i, pig in enumerate(player_inventory.owned_pigs):
             pig_y = list_start_y + (i * (item_height + 5))
             if pig_y > screen.get_height() - 100: break
 
-            card_rect = pygame.Rect(20, pig_y, 320, item_height)
-            color = DARK_GRAY
-            if pig == self.parent1 or pig == self.parent2:
-                color = BLUE
-                pygame.draw.rect(screen, GOLD, card_rect.inflate(4,4), border_radius=5)
+            color = BLUE if pig in [self.parent1, self.parent2] else DARK_GRAY
+            pygame.draw.rect(screen, color, (20, pig_y, 320, item_height), border_radius=5)
             
-            pygame.draw.rect(screen, color, card_rect, border_radius=5)
-
             name_txt = self.text_font.render(f"{pig.name}", True, WHITE)
-            screen.blit(name_txt, (30, pig_y + 5))
+            screen.blit(name_txt, (30, pig_y + 10))
             
-            pheno = f"{pig.phenotype.get('coat_color', '?')} | {pig.phenotype.get('pattern', '?')}"
-            desc_txt = self.small_font.render(pheno, True, GRAY)
-            screen.blit(desc_txt, (30, pig_y + 30))
+            # Stats snippet
+            stats = f"Speed:{pig.speed} | End:{pig.endurance}"
+            screen.blit(self.text_font.render(stats, True, GRAY), (30, pig_y + 35))
             
-            can_breed, reason = pig.can_breed()
-            status_color = GREEN if can_breed else RED
-            status_txt = self.small_font.render(reason, True, status_color)
-            screen.blit(status_txt, (30, pig_y + 50))
-            
-            stage_txt = self.small_font.render(pig.get_age_stage(), True, WHITE)
-            screen.blit(stage_txt, (250, pig_y + 5))
+            # Status
+            can, reason = pig.can_breed()
+            col = GREEN if can else RED
+            screen.blit(self.text_font.render(reason if not can else "Ready", True, col), (30, pig_y + 55))
 
+        # Draw Slots
         self._draw_slot(screen, "Parent 1", self.p1_slot_rect, self.parent1)
         self._draw_slot(screen, "Parent 2", self.p2_slot_rect, self.parent2)
 
+        # Breed Button
         btn_color = GREEN if (self.parent1 and self.parent2) else GRAY
         pygame.draw.rect(screen, btn_color, self.breed_btn_rect, border_radius=10)
-        pygame.draw.rect(screen, WHITE, self.breed_btn_rect, 3, border_radius=10)
-        
-        breed_txt = self.title_font.render("BREED", True, WHITE if (self.parent1 and self.parent2) else DARK_GRAY)
-        screen.blit(breed_txt, (self.breed_btn_rect.centerx - breed_txt.get_width()//2, 
-                                self.breed_btn_rect.centery - breed_txt.get_height()//2))
+        btn_txt = self.title_font.render("BREED", True, WHITE)
+        screen.blit(btn_txt, (self.breed_btn_rect.centerx - btn_txt.get_width()//2, 
+                              self.breed_btn_rect.centery - btn_txt.get_height()//2))
 
     def _draw_slot(self, screen, label, rect, pig):
         pygame.draw.rect(screen, (30,30,30), rect, border_radius=8)
         pygame.draw.rect(screen, WHITE, rect, 2, border_radius=8)
-        
-        lbl = self.text_font.render(label, True, GRAY)
-        screen.blit(lbl, (rect.x + 10, rect.y + 10))
+        screen.blit(self.text_font.render(label, True, GRAY), (rect.x+10, rect.y+10))
         
         if pig:
-            name = self.title_font.render(pig.name, True, GOLD)
-            screen.blit(name, (rect.centerx - name.get_width()//2, rect.centery - 20))
-            
-            stats = f"{pig.phenotype.get('coat_color', '?')}, {pig.phenotype.get('coat_length', '?')}"
-            s_txt = self.small_font.render(stats, True, WHITE)
-            screen.blit(s_txt, (rect.centerx - s_txt.get_width()//2, rect.centery + 15))
-            
-            click_txt = self.small_font.render("(Click to remove)", True, RED)
-            screen.blit(click_txt, (rect.centerx - click_txt.get_width()//2, rect.centery + 40))
-        else:
-            empty = self.text_font.render("Empty", True, DARK_GRAY)
-            screen.blit(empty, (rect.centerx - empty.get_width()//2, rect.centery))
+            nm = self.title_font.render(pig.name, True, GOLD)
+            screen.blit(nm, (rect.centerx - nm.get_width()//2, rect.centery - 15))
+
+    def _draw_naming_overlay(self, screen):
+        # Darken BG
+        overlay = pygame.Surface(screen.get_size())
+        overlay.set_alpha(200)
+        overlay.fill(BLACK)
+        screen.blit(overlay, (0,0))
+        
+        # Box
+        w, h = 400, 300
+        cx, cy = screen.get_width()//2, screen.get_height()//2
+        rect = pygame.Rect(cx - w//2, cy - h//2, w, h)
+        pygame.draw.rect(screen, (50, 50, 60), rect, border_radius=15)
+        pygame.draw.rect(screen, GOLD, rect, 3, border_radius=15)
+        
+        # Text
+        total = len(self.temp_babies)
+        current = self.current_baby_idx + 1
+        
+        title = self.title_font.render("It's a Baby!", True, WHITE)
+        screen.blit(title, (cx - title.get_width()//2, rect.y + 30))
+        
+        count_txt = self.text_font.render(f"Naming baby {current} of {total}", True, GRAY)
+        screen.blit(count_txt, (cx - count_txt.get_width()//2, rect.y + 80))
+        
+        # Input Box
+        input_rect = pygame.Rect(cx - 150, rect.y + 130, 300, 50)
+        pygame.draw.rect(screen, WHITE, input_rect)
+        
+        # Input Text
+        name_surf = self.title_font.render(self.input_name, True, BLACK)
+        screen.blit(name_surf, (input_rect.x + 10, input_rect.y + 10))
+        
+        # Footer
+        hint = self.text_font.render("Type name and press ENTER", True, GOLD)
+        screen.blit(hint, (cx - hint.get_width()//2, rect.bottom - 50))
 
 
 breeding_manager = BreedingPage()
 
 def breeding_update(events, player_inventory):
-    for event in events:
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            result = breeding_manager.handle_click(event.pos, player_inventory)
-            if result:
-                return result
-    return None
+    return breeding_manager.handle_input(events, player_inventory)
 
 def breeding_draw(screen, player_inventory):
     breeding_manager.draw(screen, player_inventory)

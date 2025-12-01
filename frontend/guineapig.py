@@ -59,5 +59,6 @@ class GuineaPigSprite:
             "Endurance": endurance,
             "Hunger": f"{hunger}/3",
             "Age": age_val,
-            "image_surface": self.image # Pass image to popup
+            "image_surface": self.image,
+            "object": self.data  # <--- ADD THIS LINE so we can rename the real object
         }
