@@ -2,46 +2,78 @@ import pygame
 import time
 import datetime
 import os
+import random
 
-# --- Colors ---
+# -------------------------------------------------
+# Helpers
+# -------------------------------------------------
+
+def is_overlapping(rect, others):
+    """Check if a rect overlaps ANY rect in a list."""
+    for o in others:
+        if rect.colliderect(o):
+            return True
+    return False
+
+
+# -------------------------------------------------
+# Globals
+# -------------------------------------------------
+
 PANEL_GRAY = (235, 235, 235)
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
+BLACK = (0,0,0)
+WHITE = (255,255,255)
 
-# --- Globals ---
 font = None
 sidebar_font = None
-background = None
-BG_POS = (0, 0)
-house_data = {}
+label_font = None
 
-# --- Game Time ---
+background = None
+BG_POS = (0,0)
+
+house_data = {}
+sidebar_icons = {}
+
+pig_walk_data = {}   # holds walk timers + directions
+
 game_time = {
-    "year": 1, "month": 1, "day": 1, "hour": 12, "minute": 0, "am": True
+    "year": 1, "month": 1, "day": 1,
+    "hour": 12, "minute": 0, "am": True
 }
-REAL_SECONDS_PER_GAME_MINUTE = 0.07
-last_update = 0
+
+
+# -------------------------------------------------
+# Glow Maker
+# -------------------------------------------------
 
 def make_glow(mask, intensity=22):
-    """Soft, translucent Stardew-style glow."""
     w, h = mask.get_size()
-    glow = pygame.Surface((w + intensity * 2, h + intensity * 2), pygame.SRCALPHA)
-    base = mask.to_surface(setcolor=(255, 240, 150, 5), unsetcolor=(0, 0, 0, 0))
-    base = base.convert_alpha()
-    for dx in range(-intensity, intensity + 1):
-        for dy in range(-intensity, intensity + 1):
+    glow = pygame.Surface((w + intensity*2, h + intensity*2), pygame.SRCALPHA)
+    base = mask.to_surface(setcolor=(255,240,150,5), unsetcolor=(0,0,0,0)).convert_alpha()
+
+    for dx in range(-intensity, intensity+1):
+        for dy in range(-intensity, intensity+1):
             dist = abs(dx) + abs(dy)
             if dist <= intensity:
-                alpha = max(1, 35 - dist * 1.4)
-                temp = base.copy()
-                temp.fill((255, 240, 150, alpha), special_flags=pygame.BLEND_RGBA_MULT)
-                glow.blit(temp, (dx + intensity, dy + intensity))
+                alpha = max(1, 35 - dist*1.4)
+                tmp = base.copy()
+                tmp.fill((255,240,150,alpha), special_flags=pygame.BLEND_RGBA_MULT)
+                glow.blit(tmp, (dx+intensity, dy+intensity))
+
     return glow
 
+
+# -------------------------------------------------
+# Initialization
+# -------------------------------------------------
+
 def homescreen_init(screen_w, screen_h):
-    global font, sidebar_font, background, BG_POS, house_data
+    global font, sidebar_font, label_font
+    global background, BG_POS, house_data, sidebar_icons
+
     pygame.font.init()
     font = pygame.font.Font(None, 40)
+    label_font = pygame.font.Font(None, 32)
     sidebar_font = pygame.font.Font(None, 26)
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -49,117 +81,277 @@ def homescreen_init(screen_w, screen_h):
 
     try:
         raw_bg = pygame.image.load(bg_path).convert_alpha()
-    except FileNotFoundError:
-        raw_bg = pygame.Surface((800, 600))
-        raw_bg.fill((100, 100, 200)) 
+    except:
+        raw_bg = pygame.Surface((800,600))
+        raw_bg.fill((100,100,200))
 
+    # scale background to full height
     raw_w, raw_h = raw_bg.get_width(), raw_bg.get_height()
     scale = screen_h / raw_h
     new_w = int(raw_w * scale)
     new_h = int(raw_h * scale)
 
-    background = pygame.transform.scale(raw_bg, (new_w, new_h))
-    BG_POS = ((screen_w - new_w) // 2, 0)
+    background = pygame.transform.scale(raw_bg, (new_w,new_h))
+    BG_POS = ((screen_w - new_w)//2, 0)
 
+    # House rects from original sprite sheet
     houses_original = {
-        "home":       (132, 83, 215, 232),
-        "mini_games": (348, 331, 202, 215),
-        "store":      (423, 624, 195, 178),
-        "training":   (50,  328, 198, 183), 
-        "breeding":   (156, 535, 218, 200),
+        "home":       (150,83,215,232),
+        "training":   (20,328,198,183),
+        "mini_games": (370,331,202,215),
+        "breeding":   (250,535,120,200),
+        "store":      (443,624,195,178),
     }
 
+    # build scaled rects + masks
     house_data = {}
-    for name, (ox, oy, ow, oh) in houses_original.items():
-        house_img = raw_bg.subsurface(pygame.Rect(ox, oy, ow, oh)).copy()
-        sw, sh = int(ow * scale), int(oh * scale)
-        house_img = pygame.transform.scale(house_img, (sw, sh))
-        mask = pygame.mask.from_surface(house_img)
-        glow = make_glow(mask, intensity=22)
-        
-        sx = int(ox * scale) + BG_POS[0]
-        sy = int(oy * scale) + BG_POS[1]
-        house_data[name] = {"rect": pygame.Rect(sx, sy, sw, sh), "img": house_img, "mask": mask, "glow": glow}
+    for name,(ox,oy,ow,oh) in houses_original.items():
+        sprite = raw_bg.subsurface(pygame.Rect(ox,oy,ow,oh)).copy()
+        sw,sh = int(ow*scale), int(oh*scale)
+        sprite = pygame.transform.scale(sprite, (sw,sh))
+
+        mask = pygame.mask.from_surface(sprite)
+        glow = make_glow(mask,22)
+
+        sx = int(ox*scale) + BG_POS[0]
+        sy = int(oy*scale) + BG_POS[1]
+
+        house_data[name] = {
+            "rect": pygame.Rect(sx,sy,sw,sh),
+            "img": sprite,
+            "mask": mask,
+            "glow": glow
+        }
+
+    # Sidebar icons
+    clock_icon_path = os.path.join(current_dir,"images","HP_In-Game_Time.png")
+    coin_icon_path  = os.path.join(current_dir,"images","GL_Coin.png")
+
+    try:
+        clock_icon = pygame.image.load(clock_icon_path).convert_alpha()
+        coin_icon  = pygame.image.load(coin_icon_path).convert_alpha()
+    except:
+        clock_icon = pygame.Surface((32,32))
+        coin_icon  = pygame.Surface((32,32))
+
+    sidebar_icons = {
+        "clock": pygame.transform.scale(clock_icon,(32,32)),
+        "coin": pygame.transform.scale(coin_icon,(50,50)),
+    }
+
+    # Load pig sprites
+    pig_sprites = {}
+
+    short_dir = os.path.join(current_dir,"images","Guinea Pigs","SH_GP_Sprites","SH_GP_Sprites")
+    long_dir  = os.path.join(current_dir,"images","Guinea Pigs","LH_GP_Sprites","LH_GP_Sprites")
+
+    short_files = [f for f in os.listdir(short_dir) if f.endswith(".png")]
+    long_files  = [f for f in os.listdir(long_dir) if f.endswith(".png")]
+
+    pig_sprites["short"] = pygame.image.load(os.path.join(short_dir, short_files[0])).convert_alpha()
+    pig_sprites["long"]  = pygame.image.load(os.path.join(long_dir,  long_files[0])).convert_alpha()
+
+    # scale pigs smaller
+    for k in pig_sprites:
+        pig_sprites[k] = pygame.transform.scale(pig_sprites[k], (45,45))  # half size
+
+    house_data["pig_sprites"] = pig_sprites
+
+    print("Homescreen initialized.")
+
+
+# -------------------------------------------------
+# Time update
+# -------------------------------------------------
 
 def homescreen_update(events):
-    global last_update, game_time
-    now = time.time()
-    if last_update == 0: last_update = now
+    # simple game clock
+    game_time["minute"] += 1
+    if game_time["minute"] >= 60:
+        game_time["minute"] = 0
+        game_time["hour"] += 1
+    if game_time["hour"] >= 24:
+        game_time["hour"] = 0
+        game_time["day"] += 1
+    if game_time["day"] > 30:
+        game_time["day"] = 1
+        game_time["month"] += 1
+    if game_time["month"] > 12:
+        game_time["month"] = 1
+        game_time["year"] += 1
 
-    if now - last_update >= REAL_SECONDS_PER_GAME_MINUTE:
-        last_update = now
-        game_time["minute"] += 1
-        if game_time["minute"] >= 60:
-            game_time["minute"] = 0
-            game_time["hour"] += 1
-        game_time["day"] += 1 
-        if game_time["day"] > 30:
-            game_time["day"] = 1
-            game_time["month"] += 1
-        if game_time["month"] > 12:
-            game_time["month"] = 1
-            game_time["year"] += 1
 
-    mouse_pos = pygame.mouse.get_pos()
-    for event in events:
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            for name, data in house_data.items():
-                rect = data["rect"]
-                mask = data["mask"]
-                lx = mouse_pos[0] - rect.x
-                ly = mouse_pos[1] - rect.y
-                if 0 <= lx < rect.width and 0 <= ly < rect.height:
-                    if mask.get_at((lx, ly)):
-                        return name
-    return None
+# -------------------------------------------------
+# Labels
+# -------------------------------------------------
 
-def homescreen_draw(screen, player_inventory=None):
+HOUSE_LABELS = {
+    "home":"Home",
+    "training":"Training",
+    "mini_games":"Mini Games",
+    "breeding":"Breeding",
+    "store":"Store"
+}
+
+
+# -------------------------------------------------
+# Pig Movement Helpers
+# -------------------------------------------------
+def begin_walk(pig_id):
+    """Assign a random direction & next timer for a pig."""
+    dirs = [
+        (1,0), (-1,0),
+        (0,1), (0,-1),
+        (1,1), (-1,1),
+        (1,-1), (-1,-1),
+        (0,0), (0,0), (0,0)   # more stopping
+    ]
+    dx,dy = random.choice(dirs)
+    pig_walk_data[pig_id] = {
+        "dx":dx, "dy":dy,
+        "timer": time.time() + random.uniform(2.5,5.0)  # slower change rate
+    }
+
+
+
+
+def move_pig(rect, pig_id, forbidden, others):
+    """Try to move pig smoothly; if collision, choose new direction."""
+    if pig_id not in pig_walk_data:
+        begin_walk(pig_id)
+
+    info = pig_walk_data[pig_id]
+
+    # change direction?
+    if time.time() > info["timer"]:
+        begin_walk(pig_id)
+        info = pig_walk_data[pig_id]
+
+    new_rect = rect.move(info["dx"], info["dy"])
+
+    # check collisions
+    if is_overlapping(new_rect, forbidden) or is_overlapping(new_rect, others):
+        begin_walk(pig_id)
+        return rect   # stay still this frame
+
+    return new_rect
+
+
+
+# -------------------------------------------------
+# Main Draw
+# -------------------------------------------------
+
+def homescreen_draw(screen, player_inventory=None, pigs=None):
     screen.fill(BLACK)
     screen.blit(background, BG_POS)
+
     mouse_pos = pygame.mouse.get_pos()
 
-    # Hover glow
-    for name, data in house_data.items():
+    # hover glow
+    for name,data in house_data.items():
+        if name=="pig_sprites": continue
         rect = data["rect"]
         mask = data["mask"]
         glow = data["glow"]
+
         lx = mouse_pos[0] - rect.x
         ly = mouse_pos[1] - rect.y
 
-        if 0 <= lx < rect.width and 0 <= ly < rect.height and mask.get_at((lx, ly)):
-            gx = rect.x - (glow.get_width() - rect.width) // 2
-            gy = rect.y - (glow.get_height() - rect.height) // 2
-            glow_rect = pygame.Rect(gx, gy, glow.get_width(), glow.get_height())
-            clipped = glow_rect.clip(screen.get_rect())
-            if clipped.width > 0 and clipped.height > 0:
-                screen.blit(glow, clipped.topleft, pygame.Rect(clipped.x - gx, clipped.y - gy, clipped.width, clipped.height))
+        if 0<=lx<rect.width and 0<=ly<rect.height and mask.get_at((lx,ly)):
+            gx = rect.x - (glow.get_width()-rect.width)//2
+            gy = rect.y - (glow.get_height()-rect.height)//2
+            screen.blit(glow,(gx,gy))
 
-    # Sidebar UI
-    w, h = screen.get_size()
-    pygame.draw.rect(screen, PANEL_GRAY, (w - 180, 20, 160, 220))
+    # Labels
+    label_rects = []
+    for name,data in house_data.items():
+        if name=="pig_sprites": continue
+        rect = data["rect"]
+        label = HOUSE_LABELS.get(name,"")
+        surf = label_font.render(label, True, WHITE)
+        text_rect = surf.get_rect(center=(rect.centerx, rect.bottom+20))
+        screen.blit(surf, text_rect)
+        label_rects.append(text_rect.inflate(40,20))
+
+    # -------------------------------------------------
+    # Forbidden Zones (houses + labels + tree)
+    # -------------------------------------------------
+    forbidden = [house_data[n]["rect"] for n in house_data if n!="pig_sprites"]
+    forbidden.extend(label_rects)
+    forbidden.append(pygame.Rect(70,380,120,150))  # tree area
+
+    # -------------------------------------------------
+    # Pigs wandering
+    # -------------------------------------------------
+    if pigs:
+        pig_sprites = house_data["pig_sprites"]
+
+        home_rect = house_data["home"]["rect"]
+        walk_area = pygame.Rect(
+            home_rect.centerx - 200,
+            home_rect.bottom + 10,
+            400,
+            250
+        )
+
+        pig_rects = []
+        for i,pig in enumerate(pigs):
+            coat_len = pig.phenotype.get("coat_length","Short")
+            sprite_key = "long" if coat_len.lower()=="long" else "short"
+            sprite = pig_sprites[sprite_key]
+
+            # initialize pigs at center bottom of home
+            if not hasattr(pig, "screen_rect"):
+                pig.screen_rect = sprite.get_rect()
+                pig.screen_rect.midtop = (home_rect.centerx, home_rect.bottom+40)
+
+            # movement
+            new_rect = move_pig(pig.screen_rect, pig.id, forbidden, pig_rects)
+
+            # clamp to walk area
+            if not walk_area.contains(new_rect):
+                begin_walk(pig.id)
+
+            pig.screen_rect = new_rect
+            pig_rects.append(new_rect)
+
+            screen.blit(sprite, new_rect.topleft)
+
+    # -------------------------------------------------
+    # Sidebar
+    # -------------------------------------------------
+    w,h = screen.get_size()
+    panel = pygame.Rect(w-180,20,160,260)
+    pygame.draw.rect(screen, PANEL_GRAY, panel)
+
     real_clock = datetime.datetime.now().strftime("%I:%M %p")
-
-    # --- DYNAMIC DATA HERE ---
     coins = player_inventory.coins if player_inventory else 0
-    food = player_inventory.food if player_inventory else 0
-    # Count T1 (or specific items) manually or show total items
-    # For now just showing food count
-    
-    sidebar_lines = [
+    food  = player_inventory.food if player_inventory else 0
+
+    tx = w-170
+    ty = 40
+
+    for line in [
         f"Year: {game_time['year']}",
         f"Month: {game_time['month']}",
         f"Day: {game_time['day']}",
-        "",
-        f"clock: {real_clock}",
-        "",
-        f"Coins: {coins}",
-        f"Food: {food}",
-        "",
-        "Inventory",
-    ]
+    ]:
+        screen.blit(sidebar_font.render(line,True,BLACK),(tx,ty))
+        ty += 20
 
-    y = 40
-    for line in sidebar_lines:
-        text_surface = sidebar_font.render(line, True, BLACK)
-        screen.blit(text_surface, (w - 170, y))
-        y += 20
+    screen.blit(sidebar_icons["clock"], (tx, ty))
+    screen.blit(sidebar_font.render(real_clock,True,BLACK),(tx+40,ty+8))
+    ty+=30
+
+    screen.blit(sidebar_icons["coin"], (tx-10,ty))
+    screen.blit(sidebar_font.render(f"Coins: {coins}",True,BLACK),(tx+40,ty+15))
+    ty+=55
+
+    screen.blit(sidebar_font.render("Food Inventory",True,BLACK),(tx,ty))
+    ty+=15
+    screen.blit(sidebar_font.render("---------------------",True,BLACK),(tx,ty))
+    ty+=20
+    screen.blit(sidebar_font.render(f"Basic: {food}",True,BLACK),(tx,ty))
+    ty+=20
+    screen.blit(sidebar_font.render(f"Premium: {food}",True,BLACK),(tx,ty))
