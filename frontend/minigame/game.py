@@ -20,6 +20,7 @@ class Game:
         self.running = True
         self.selected_guinea_pig = selected_guinea_pig
         self.player_inventory = player_inventory
+        self.collected_amount = 0
 
         # Screen Dimensions (Should match main.py)
         self.SCREEN_WIDTH = 672
@@ -100,12 +101,12 @@ class Game:
             self.check_win()
             self.check_exit()
 
-            self.PACMAN_MAZE, collected_amount = self.fruit.if_collected(
+            self.PACMAN_MAZE, self.collected_amount = self.fruit.if_collected(
                 (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
             )
             
-            if collected_amount > 0 and self.player_inventory:
-                self.player_inventory.add_food('Banana', collected_amount)
+            if self.collected_amount > 0 and self.player_inventory:
+                self.player_inventory.add_food('Banana', self.collected_amount)
                 print(f"Collected fruit! Total Food: {self.player_inventory.food}")
 
     def check_exit(self):
