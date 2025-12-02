@@ -1,104 +1,145 @@
 import pygame
+import sys
+import os
+import ctypes
+
+# --- 1. FIX WINDOWS SCALING ---
+try:
+    ctypes.windll.user32.SetProcessDPIAware()
+except AttributeError:
+    pass
+
+# --- 2. INITIALIZE PYGAME ---
 pygame.init()
 
-from guineapig import Guineapig
-from title import title_update, title_draw
-from homescreen import homescreen_init, homescreen_update, homescreen_draw
-
-# --- NEW IMPORTS ---
-from minigame.game import Game 
-import store_page                 # <--- Just import the file name
-from store_module import PlayerInventory
-
-# Original screen size
-screen_width = 800
-screen_height = 600
+screen_width = 672
+screen_height = 864
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("Guinea Games")
-
 clock = pygame.time.Clock()
 FPS = 60
-current_page = "title"
 
-# --- INITIALIZE PERSISTENT DATA ---
-# We create the inventory HERE so it survives between page changes
-# Giving the player 500 coins to start so you can test buying things
-player_inventory = PlayerInventory(coins=500) 
+# --- 3. IMPORT CUSTOM MODULES ---
+import homescreen
+import title
+import store_page
+from store_module import PlayerInventory
+from minigame.minigame_page import MinigamePage
+import breeding 
+from breeding import GuineaPig 
+from settings_popup import SettingsPopup
+import help_page
 
-# Initialize pages
-homescreen_init()
-store_page.store_init() # Init fonts for store
+# --- 4. INITIALIZE PAGES & DATA ---
+try:
+    homescreen.homescreen_init(screen_width, screen_height)
+except AttributeError:
+    pass
 
-# Add a variable to hold the minigame instance
-active_minigame = None
+store_page.store_init()
+player_inventory = PlayerInventory(coins=500)
 
-running = True 
+settings_popup = SettingsPopup(screen_width, screen_height)
+settings_active = False 
+previous_menu = 'homescreen' 
+
+# --- CREATE STARTER PIGS ---
+starter_1 = GuineaPig("Starter Alpha")
+starter_2 = GuineaPig("Starter Beta")
+player_inventory.owned_pigs.extend([starter_1, starter_2])
+
+minigame_manager = MinigamePage(user_id=1, player_inventory=player_inventory)
+
+# --- 5. MAIN GAME LOOP ---
+currentmenu = "title"
+running = True
+
 while running:
     events = pygame.event.get()
     
     for event in events:
         if event.type == pygame.QUIT:
             running = False
-
-    # --- TITLE ---
-    if current_page == "title":
-        screen = pygame.display.set_mode((screen_width, screen_height))
-        next_page = title_update(events)
-        title_draw(screen)
-        if next_page == "homescreen":
-            current_page = "homescreen"
-
-    # --- HOMESCREEN ---
-    elif current_page == "homescreen":
-        screen = pygame.display.set_mode((screen_width, screen_height))
-        
-        next_page = homescreen_update(events)
-        homescreen_draw(screen)
-        
-        # Draw HUD using real inventory data
-        # (Optional: You can eventually link the homescreen sidebar to player_inventory.coins)
-        
-        if next_page == "mini_games":
-            print("Starting minigame!")
-            active_minigame = Game()
-            screen = pygame.display.set_mode((active_minigame.maze.width, active_minigame.maze.height))
-            current_page = "minigame"
             
-        elif next_page == "store": # <--- THIS CATCHES THE CLICK FROM HOMESCREEN
-            print("Going to Store...")
-            current_page = "store"
-            
-        elif next_page:
-            print(f"Navigating to {next_page}")
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                if currentmenu != 'title':
+                    settings_active = not settings_active
+                    settings_popup.active = settings_active
+                    if not settings_active:
+                        settings_popup.active = False
 
-    # --- MINIGAME ---
-    elif current_page == "minigame":
-        if active_minigame:
-            next_page = active_minigame.update(events)
-            active_minigame.draw(screen)
-            
-            if next_page == "homescreen":
-                current_page = "homescreen"
-                active_minigame = None 
-                screen = pygame.display.set_mode((screen_width, screen_height))
-        else:
-            current_page = "homescreen"
-            screen = pygame.display.set_mode((screen_width, screen_height))
+        if settings_active:
+            action = settings_popup.handle_event(event)
+            if action == 'quit_game':
+                running = False
+            elif action == 'help':
+                previous_menu = currentmenu 
+                currentmenu = 'help'
+                settings_active = False
+                settings_popup.active = False
 
-    # --- NEW: STORE PAGE ---
-    elif current_page == "store":
-        # 1. Update
-        # We pass 'player_inventory' so we can spend coins
-        next_page = store_page.store_update(events, player_inventory)
-        
-        # 2. Draw
+    # --- STATE UPDATES & DRAWING ---
+    
+    if currentmenu == 'title':
+        if not settings_active:
+            new_state = title.title_update(events)
+            if new_state:
+                currentmenu = new_state
+        title.title_draw(screen)
+
+    elif currentmenu == 'homescreen':
+        if not settings_active:
+            new_state = homescreen.homescreen_update(events)
+            if new_state:
+                if new_state == 'mini_games' or new_state == 'gameplay':
+                    currentmenu = 'minigame'
+                elif new_state == 'store':
+                    currentmenu = 'store'
+                elif new_state == 'breeding':
+                    currentmenu = 'breeding'
+                elif new_state == 'details':
+                    print("Details page coming soon.")
+                else:
+                    currentmenu = new_state
+        homescreen.homescreen_draw(screen, player_inventory)
+
+    elif currentmenu == 'store':
+        if not settings_active:
+            new_state = store_page.store_update(events, player_inventory)
+            if new_state == 'homescreen':
+                currentmenu = 'homescreen'
         store_page.store_draw(screen, player_inventory)
-        
-        # 3. Navigation
-        if next_page == "homescreen":
-            current_page = "homescreen"
+
+    elif currentmenu == 'breeding':
+        # --- UPDATED: Pass homescreen.game_time ---
+        if not settings_active:
+            new_state = breeding.breeding_update(events, player_inventory, homescreen.game_time)
+            if new_state == 'homescreen':
+                currentmenu = 'homescreen'
+        breeding.breeding_draw(screen, player_inventory, homescreen.game_time)
+
+    elif currentmenu == 'minigame':
+        if not settings_active:
+            result = minigame_manager.update(events)
+            if result == 'homescreen':
+                currentmenu = 'homescreen'
+                screen = pygame.display.set_mode((screen_width, screen_height))
+        minigame_manager.draw(screen)
+
+    elif currentmenu == 'help':
+        res = help_page.help_update(events)
+        help_page.help_draw(screen)
+        if res == 'settings':
+            currentmenu = previous_menu
+            settings_active = True
+            settings_popup.active = True
+
+    if settings_active and currentmenu != 'title' and currentmenu != 'help':
+        settings_popup.draw(screen)
 
     pygame.display.flip()
     clock.tick(FPS)
 
 pygame.quit()
+sys.exit()
