@@ -729,10 +729,19 @@ class APIClient:
             True if connected, False otherwise
         """
         try:
-            response = self.session.get(f"{self.base_url}/docs", timeout=2)
+            # Try the simple root endpoint first
+            url = f"{self.base_url}/"
+            response = self.session.get(url, timeout=2)
+
+            # Debug print so you can see what's happening in the console
+            print(f"[API] check_connection -> {url} status {response.status_code}")
+
             return response.status_code == 200
-        except:
+        except Exception as e:
+            # More explicit debug info
+            print(f"[API] check_connection FAILED: {e}")
             return False
+
 
 
 # Singleton instance

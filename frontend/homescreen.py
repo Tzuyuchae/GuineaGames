@@ -348,22 +348,15 @@ def homescreen_draw(screen, player_inventory=None):
 
     y = 40
     for line in sidebar_lines:
-        # Simple check to support emoji if font supports it, otherwise remove emoji
-        # Pygame default fonts struggle with emojis.
         text_surface = sidebar_font.render(line, True, BLACK)
         screen.blit(text_surface, (630, y))
         y += 20
 
     # --- NEW: Draw Popup Overlay ---
     if show_popup and popup_manager and selected_pig_stats:
-        # Darken background
-
-        # FIX: use screen dimensions instead of undefined w, h
         w, h = screen.get_width(), screen.get_height()
-
         overlay = pygame.Surface((w, h), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 140))   # Semi-transparent black
         screen.blit(overlay, (0, 0))
         
-        # Draw popup content
         popup_manager.draw(screen, selected_pig_stats)

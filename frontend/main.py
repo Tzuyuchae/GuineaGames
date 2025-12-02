@@ -1,176 +1,156 @@
-import session  # backend/player session state
+# frontend/main.py
 
 import pygame
-pygame.init()
+import sys
 
-from title import title_update, title_draw
-from homescreen import homescreen_init, homescreen_update, homescreen_draw
-
-# --- NEW IMPORTS ---
-from minigame.game import Game
-from minigame.guinea_pig_selector import GuineaPigSelector
-import store_page                 # store page UI
+import session
 from store_module import PlayerInventory
+import homescreen
+from homescreen import homescreen_init, homescreen_update, homescreen_draw
+from title import title_update, title_draw
+from store_page import store_draw, store_update, store_init
+from minigame.game import Game as MiniGame
+from minigame.guinea_pig_selector import GuineaPigSelector
+import save_system
 
 
-screen_width = 800
-screen_height = 600
-screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("Guinea Games")
+def main():
+    pygame.init()
+    screen = pygame.display.set_mode((1280, 720))
+    pygame.display.set_caption("Guinea Games")
 
-clock = pygame.time.Clock()
-FPS = 60
+    clock = pygame.time.Clock()
 
-# Initialize backend session (connect to API, load/create user, load pets)
-session.init_session()
+    # -------------------------------
+    # INITIALIZATION
+    # -------------------------------
 
-current_page = "title"
+    homescreen_init(1280, 720)
+    store_init()
 
-# --- INITIALIZE PERSISTENT DATA (BACKED BY API WHEN AVAILABLE) ---
-if session.api_available and session.current_user:
-    # Use the logged-in user's actual balance + pets from the backend.
-    player_inventory = PlayerInventory(
-        coins=session.current_user.get("balance", 0)
-    )
-    # Backend returns a list of pet dicts; store them so the UI can use them.
-    player_inventory.owned_pigs = list(session.user_pets)
-else:
-    # Offline / fallback mode – same behavior as before
-    player_inventory = PlayerInventory(coins=500)
-    player_inventory.owned_pigs = []
+    session.init_session()
+    save_data = save_system.load_save()
 
-homescreen_init(screen_width, screen_height)
-store_page.store_init()
+    # Set up inventory from backend if available
+    if session.api_available and session.current_user:
+        player_inventory = PlayerInventory(
+            coins=session.current_user.get("balance", 0)
+        )
+        player_inventory.owned_pigs = list(session.user_pets)
+    else:
+        player_inventory = PlayerInventory(coins=500)
+        player_inventory.owned_pigs = []
 
+    # Restore food
+    food_data = save_data.get("food", {})
+    player_inventory.pellets = food_data.get("pellets", 0)
+    player_inventory.water = food_data.get("water", 0)
 
+    # Restore homescreen time
+    if "game_time" in save_data:
+        homescreen.game_time.update(save_data["game_time"])
 
-# Add a variable to hold the minigame instance
-active_minigame = None
-guinea_pig_selector = None
+    current_page = "title"
+    current_selector = None
+    miniggame_instance = None
 
+    running = True
 
-running = True 
-while running:
-    events = pygame.event.get()
-    
-    for event in events:
-        if event.type == pygame.QUIT:
-            running = False
+    # -------------------------------
+    # MAIN LOOP
+    # -------------------------------
+    while running:
+        events = pygame.event.get()
 
-    # --- TITLE ---
-    if current_page == "title":
-        screen = pygame.display.set_mode((screen_width, screen_height))
-        next_page = title_update(events)
-        title_draw(screen)
-        if next_page == "homescreen":
-            current_page = "homescreen"
+        for event in events:
+            if event.type == pygame.QUIT:
+                running = False
 
-    # --- HOMESCREEN ---
-    elif current_page == "homescreen":
-        screen = pygame.display.set_mode((screen_width, screen_height))
-        
-        next_page = homescreen_update(events)
-        # Pass the live inventory so the homescreen can show real pets/coins
-        homescreen_draw(screen, player_inventory)
-        
-        if next_page == "mini_games":
-            print("Going to guinea pig selector!")
+        next_page = None
 
-            # Choose the user ID from the current backend session
-            user_id = 1
-            if session.current_user is not None:
-                user_id = session.current_user["id"]
+        # ---------------------------------------
+        # TITLE SCREEN
+        # ---------------------------------------
+        if current_page == "title":
+            next_page = title_update(events)
+            title_draw(screen)
 
-            guinea_pig_selector = GuineaPigSelector(
-                screen_width=screen_width,
-                screen_height=screen_height,
-                user_id=user_id,
-            )
-            current_page = "guinea_pig_selector"
+        # ---------------------------------------
+        # HOMESCREEN
+        # ---------------------------------------
+        elif current_page == "homescreen":
+            result = homescreen_update(events)
 
-        elif next_page == "store":  # <--- THIS CATCHES THE CLICK FROM HOMESCREEN
-            print("Going to Store...")
-            current_page = "store"
-            
-        elif next_page:
-            print(f"Navigating to {next_page}")
+            if result == "store":
+                current_page = "store"
 
+            elif result == "mini_games":
+                # Move to guinea pig selector
+                current_selector = GuineaPigSelector(
+                    screen_width=1280,
+                    screen_height=720,
+                    user_id=session.current_user["id"] if session.current_user else 1,
+                )
+                current_page = "pig_selector"
 
-    # --- GUINEA PIG SELECTOR ---
-    elif current_page == "guinea_pig_selector":
-        # If somehow not initialized, create it now
-        if guinea_pig_selector is None:
-            user_id = 1
-            if session.current_user is not None:
-                user_id = session.current_user["id"]
+            homescreen_draw(screen, player_inventory)
 
-            guinea_pig_selector = GuineaPigSelector(
-                screen_width=screen_width,
-                screen_height=screen_height,
-                user_id=user_id,
-            )
-
-        # Update selector (handle clicks, selections, scrolling)
-        result = guinea_pig_selector.update(events)
-        # Draw selector
-        guinea_pig_selector.draw(screen)
-
-        # Navigation based on selector result
-        if result == "back":
-            current_page = "homescreen"
-            guinea_pig_selector = None
-
-        elif isinstance(result, tuple) and result[0] == "start_game":
-            selected_guinea_pig = result[1]
-            print(f"Starting minigame with guinea pig: {selected_guinea_pig.get('name')}")
-
-            active_minigame = Game(selected_guinea_pig=selected_guinea_pig)
-
-            # Resize the window to match maze dimensions
-            screen = pygame.display.set_mode(
-                (active_minigame.maze.width, active_minigame.maze.height)
-            )
-
-            current_page = "minigame"
-            guinea_pig_selector = None
-
-
-    # --- MINIGAME ---
-    elif current_page == "minigame":
-        if active_minigame:
-            next_page = active_minigame.update(events)
-            active_minigame.draw(screen)
-            
-            if next_page == "homescreen":
-                # We’re done with the minigame; go back to homescreen
+        # ---------------------------------------
+        # STORE
+        # ---------------------------------------
+        elif current_page == "store":
+            page_return = store_update(events, player_inventory)
+            if page_return == "homescreen":
                 current_page = "homescreen"
-                active_minigame = None 
-                screen = pygame.display.set_mode((screen_width, screen_height))
 
-                # 🔁 NEW: sync coins from backend into player_inventory
-                if getattr(session, "api_available", False) and session.current_user is not None:
-                    # session.refresh_user() was already called inside the minigame
-                    new_balance = session.current_user.get("balance", player_inventory.coins)
-                    player_inventory.coins = new_balance
-                    print(f"[SYNC] Updated local coins to {player_inventory.coins} from backend balance.")
-        else:
-            current_page = "homescreen"
-            screen = pygame.display.set_mode((screen_width, screen_height))
+            store_draw(screen, player_inventory)
 
-    # --- NEW: STORE PAGE ---
-    elif current_page == "store":
-        # 1. Update
-        # We pass 'player_inventory' so we can spend coins
-        next_page = store_page.store_update(events, player_inventory)
-        
-        # 2. Draw
-        store_page.store_draw(screen, player_inventory)
-        
-        # 3. Navigation
-        if next_page == "homescreen":
-            current_page = "homescreen"
+        # ---------------------------------------
+        # GUINEA PIG SELECTOR SCREEN
+        # ---------------------------------------
+        elif current_page == "pig_selector":
+            sel_result = current_selector.update(events)
+            current_selector.draw(screen)
 
-    pygame.display.flip()
-    clock.tick(FPS)
+            if sel_result == "back":
+                current_page = "homescreen"
 
-pygame.quit()
+            elif isinstance(sel_result, tuple) and sel_result[0] == "start_game":
+                selected_pet = sel_result[1]
+                minigame_instance = MiniGame(selected_pig=selected_pet)
+                current_page = "mini_games"
+
+        # ---------------------------------------
+        # MINIGAME
+        # ---------------------------------------
+        elif current_page == "mini_games":
+            page_return = minigame_instance.update(events)
+            minigame_instance.draw(screen)
+
+            if page_return == "homescreen":
+                minigame_instance = None
+                current_page = "homescreen"
+
+        if next_page is not None:
+            current_page = next_page
+
+        pygame.display.flip()
+        clock.tick(60)
+
+    # -------------------------------
+    # SAVE ON EXIT
+    # -------------------------------
+    save_system.save_game_time(save_data, homescreen.game_time)
+    save_system.save_food(
+        save_data,
+        getattr(player_inventory, "pellets", 0),
+        getattr(player_inventory, "water", 0)
+    )
+    save_system.save(save_data)
+
+    pygame.quit()
+    sys.exit()
+
+
+if __name__ == "__main__":
+    main()

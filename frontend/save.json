@@ -1,0 +1,15 @@
+{
+    "game_time": {
+        "year": 3,
+        "month": 6,
+        "day": 30,
+        "hour": 26,
+        "minute": 59,
+        "am": false
+    },
+    "food": {
+        "pellets": 0,
+        "water": 0
+    },
+    "pet_stats": {}
+}
