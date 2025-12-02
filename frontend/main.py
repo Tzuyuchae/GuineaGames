@@ -36,7 +36,7 @@ try:
 except AttributeError:
     pass
 
-store_page.store_init()
+store_page.store_init("frontend/images/BG_Store.png")
 player_inventory = PlayerInventory(coins=500)
 
 settings_popup = SettingsPopup(screen_width, screen_height)
