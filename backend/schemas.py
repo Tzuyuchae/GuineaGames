@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel
+from typing import Optional, List
 import datetime
 
 # =====================
@@ -15,7 +15,7 @@ class UserCreate(UserBase):
 class User(UserBase):
     id: int
     balance: int = 0
-    pets: list['Pet'] = []
+    pets: List['Pet'] = []
 
     class Config:
         from_attributes = True
@@ -79,20 +79,12 @@ class InventoryUpdate(BaseModel):
 # TRANSACTION SCHEMAS
 # =====================
 class TransactionBase(BaseModel):
-    # Accept JSON field "transaction_type" but store it on the model as "type"
-    type: str = Field(alias="transaction_type")
+    type: str
     amount: int
     description: Optional[str] = None
 
-    class Config:
-        # allow us to also populate by the field name "type" if needed
-        from_attributes = True
-        populate_by_name = True
-
-
 class TransactionCreate(TransactionBase):
     user_id: int
-
 
 class Transaction(TransactionBase):
     id: int
@@ -101,8 +93,6 @@ class Transaction(TransactionBase):
 
     class Config:
         from_attributes = True
-        populate_by_name = True
-
 
 # =====================
 # MINI_GAME SCHEMAS
@@ -189,7 +179,7 @@ class GeneCreate(GeneBase):
 class Gene(GeneBase):
     id: int
     default_allele_id: Optional[int] = None
-    alleles: list['Allele'] = []
+    alleles: List['Allele'] = []
 
     class Config:
         from_attributes = True
@@ -243,16 +233,16 @@ class PunnettSquareResult(BaseModel):
     gene_name: str
     parent1_genotype: str
     parent2_genotype: str
-    possible_offspring: list[str]
+    possible_offspring: List[str]
     probabilities: dict
-    punnett_square: list[list[str]]
+    punnett_square: List[List[str]]
 
 class BreedingOutcome(BaseModel):
     """Complete breeding outcome with inherited genetics"""
     child_id: int
     child_name: str
     child_genetics: str
-    punnett_squares: list[PunnettSquareResult]
+    punnett_squares: List[PunnettSquareResult]
     estimated_stats: dict
     inheritance_summary: str
 

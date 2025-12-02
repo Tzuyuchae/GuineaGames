@@ -1,182 +1,282 @@
+"""
+Guinea Pig Selector Screen
+Allows users to select a guinea pig before starting the minigame.
+"""
 import pygame
-import os
 import sys
+import os
+import random
 
-# Ensure the module can find api_client when running from /frontend
+# Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# ----------------------------------------------------------
-#  IMPORTS
-# ----------------------------------------------------------
-# Use the existing minigame Button implementation
-from .button import Button
-
-# API client import (works in both execution modes)
-try:
-    from api_client import APIClient         # running: python frontend/main.py
-except ImportError:
-    from frontend.api_client import APIClient
-
+from minigame.button import Button
+from minigame.settings import *
 
 class GuineaPigSelector:
-    """
-    Screen that lets the player choose one of their guinea pigs.
+    """Screen for selecting a guinea pig to use in the minigame."""
 
-    Integration points:
-      - Loads pets from backend via APIClient.get_user_pets(user_id)
-      - Returns:
-          ('start_game', selected_pet_dict)  when Start is clicked
-          'back'                             when Back is clicked
-          None                               otherwise
-    """
-
-    def __init__(self, screen_width: int, screen_height: int, user_id: int):
+    def __init__(self, screen_width=672, screen_height=864, user_id=1, inventory_pigs=None):
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.user_id = user_id
+        self.inventory_pigs = inventory_pigs 
 
-        self.font = pygame.font.Font(None, 36)
-        self.title_font = pygame.font.Font(None, 48)
-
-        # Layout for the scrollable list
-        self.margin_top = 100
-        self.margin_left = 80
-        self.item_height = 70
-        self.item_width = screen_width - 2 * self.margin_left
+        # UI state
+        self.selected_pet = None
+        self.pets = []
         self.scroll_offset = 0
-        self.scroll_speed = 25
+        self.max_visible_pets = 5
 
-        # Buttons at bottom
-        self.start_button = Button(
-            60,
-            screen_height - 80,
-            200,
-            60,
-            "Start",
+        # Initialize font
+        pygame.font.init()
+        try:
+            self.title_font = pygame.font.SysFont('Arial', 40, bold=True)
+            self.pet_font = pygame.font.SysFont('Arial', 24, bold=True)
+            self.info_font = pygame.font.SysFont('Arial', 18)
+        except:
+            self.title_font = pygame.font.Font(None, 50)
+            self.pet_font = pygame.font.Font(None, 30)
+            self.info_font = pygame.font.Font(None, 22)
+
+        # Load Assets
+        self.background_img = self._load_background()
+        self.default_sprite = self._load_default_sprite()
+
+        # Create buttons
+        button_y = screen_height - 100
+        self.button_start = Button(
+            screen_width // 2 - 110, button_y, 200, 60, 
+            'START', (0, 150, 0), (0, 200, 0)
         )
-        self.back_button = Button(
-            screen_width - 260,
-            screen_height - 80,
-            200,
-            60,
-            "Back",
+        self.button_back = Button(
+            screen_width // 2 + 110, button_y, 200, 60,
+            'BACK', (150, 0, 0), (200, 0, 0)
         )
 
-        self.api = APIClient()
+        # Pet selection buttons
+        self.pet_buttons = []
 
-        # Data
-        self.pets = []           # list of dicts from backend
-        self.pet_rects = []      # list of pygame.Rect for clickable rows
-        self.selected_index = None
-
+        # Load pets
         self._load_pets()
 
-    # ------------------------------------------------------
+    def _load_background(self):
+        """Loads and scales the title background."""
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        # Check multiple locations
+        paths_to_check = [
+            os.path.join(base_path, "../../images/BG_Title.png"),
+            os.path.join(base_path, "../images/BG_Title.png"),
+            os.path.join(base_path, "../../Global Assets/Sprites/More Sprites/BG Art/Title/BG_Title.png")
+        ]
+        
+        for p in paths_to_check:
+            if os.path.exists(p):
+                try:
+                    img = pygame.image.load(p).convert()
+                    return pygame.transform.scale(img, (self.screen_width, self.screen_height))
+                except:
+                    pass
+        return None
+
+    def _load_default_sprite(self):
+        """Loads the default guinea pig sprite for fallback."""
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        paths_to_check = [
+            os.path.join(base_path, "../../images/guineapig.png"),
+            os.path.join(base_path, "../images/guineapig.png"),
+            os.path.join(base_path, "../../Global Assets/guineapig.png")
+        ]
+        
+        for p in paths_to_check:
+            if os.path.exists(p):
+                try:
+                    img = pygame.image.load(p).convert_alpha()
+                    return pygame.transform.scale(img, (60, 60))
+                except:
+                    pass
+        
+        # Fallback surface if image fails
+        s = pygame.Surface((60, 60))
+        s.fill((150, 75, 0))
+        return s
+
     def _load_pets(self):
-        """Load pets from backend or fallback to mock data."""
-        try:
-            pets = self.api.get_user_pets(self.user_id)
-            if not pets:
-                print("No backend pets found; using mock pets.")
-                pets = self._mock_pets()
-        except Exception as e:
-            print(f"Error loading pets from API: {e}")
-            pets = self._mock_pets()
+        self.pets = []
 
-        self.pets = pets
-        self._build_pet_rects()
+        # 1. Check Local Inventory
+        if self.inventory_pigs and len(self.inventory_pigs) > 0:
+            for pig_obj in self.inventory_pigs:
+                # Basic Info
+                pet_dict = {
+                    'id': getattr(pig_obj, 'id', random.randint(1000,9999)),
+                    'name': getattr(pig_obj, 'name', 'Unknown'),
+                    'species': 'guinea_pig',
+                    'color': 'brown', 
+                    'speed': 50,      
+                    'health': 100,
+                    'happiness': 100,
+                    'sprite': None
+                }
 
-    # ------------------------------------------------------
-    def _mock_pets(self):
+                # Get Sprite: Check if object already has one, else use default
+                if hasattr(pig_obj, 'image') and pig_obj.image:
+                    # Scale existing image to button size
+                    pet_dict['sprite'] = pygame.transform.scale(pig_obj.image, (60, 60))
+                else:
+                    pet_dict['sprite'] = self.default_sprite
+
+                # Extract Stats
+                if hasattr(pig_obj, 'phenotype') and isinstance(pig_obj.phenotype, dict):
+                    pet_dict['color'] = pig_obj.phenotype.get('coat_color', 'brown')
+                
+                if hasattr(pig_obj, 'score'):
+                    # Simple logic: Score 100->40 speed, 500->80 speed
+                    pet_dict['speed'] = int(40 + (pig_obj.score / 500) * 40)
+                elif hasattr(pig_obj, 'speed'):
+                    pet_dict['speed'] = pig_obj.speed
+
+                self.pets.append(pet_dict)
+
+        # 2. Fallback Mock Data
+        else:
+            self.pets = self._get_mock_pets()
+
+        self._create_pet_buttons()
+
+        if self.pets:
+            self.selected_pet = self.pets[0]
+
+    def _get_mock_pets(self):
         return [
-            {"name": "Fluffy", "type": "guinea_pig"},
-            {"name": "Squeaky", "type": "guinea_pig"},
-            {"name": "Nibbles", "type": "guinea_pig"},
+            {'id': 1, 'name': 'Fluffy (Mock)', 'color': 'brown', 'speed': 55, 'sprite': self.default_sprite},
+            {'id': 2, 'name': 'Squeaky (Mock)', 'color': 'white', 'speed': 70, 'sprite': self.default_sprite},
+            {'id': 3, 'name': 'Nibbles (Mock)', 'color': 'orange', 'speed': 45, 'sprite': self.default_sprite}
         ]
 
-    # ------------------------------------------------------
-    def _build_pet_rects(self):
-        """Create a list of rectangles representing each pet row."""
-        self.pet_rects = []
-        y = self.margin_top
-        for _ in self.pets:
-            rect = pygame.Rect(self.margin_left, y, self.item_width, self.item_height)
-            self.pet_rects.append(rect)
-            y += self.item_height + 10
+    def _create_pet_buttons(self):
+        self.pet_buttons = []
+        button_width = 500
+        button_height = 80
+        start_x = (self.screen_width - button_width) // 2
+        start_y = 120
+        spacing = 10
 
-    # ------------------------------------------------------
+        for i, pet in enumerate(self.pets):
+            y_pos = start_y + i * (button_height + spacing)
+            button = Button(
+                start_x + button_width // 2,
+                y_pos + button_height // 2,
+                button_width,
+                button_height,
+                "", 
+                (50, 50, 150),
+                (80, 80, 200)
+            )
+            button.rect.center = (start_x + button_width // 2, y_pos + button_height // 2)
+            self.pet_buttons.append(button)
+
     def update(self, events):
-        """
-        Handles input and scroll.
-
-        Returns:
-          - ('start_game', pet_dict) when Start is clicked with a selection
-          - 'back' when Back is clicked
-          - None otherwise
-        """
-
-        # Scroll using arrow keys
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_UP]:
-            self.scroll_offset = min(self.scroll_offset + self.scroll_speed, 0)
-        if keys[pygame.K_DOWN]:
-            self.scroll_offset -= self.scroll_speed
-
         mouse_pos = pygame.mouse.get_pos()
 
         for event in events:
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                mx, my = event.pos
+            if self.button_back.check_click(event):
+                return 'back'
 
-                # Check clicks on pet rows
-                for i, rect in enumerate(self.pet_rects):
-                    shifted_rect = rect.move(0, self.scroll_offset)
-                    if shifted_rect.collidepoint(mx, my):
-                        self.selected_index = i
+            if self.button_start.check_click(event):
+                if self.selected_pet:
+                    return ('start_game', self.selected_pet)
 
-            # Use the real Button API: check_click(event)
-            if self.start_button.check_click(event):
-                if self.selected_index is not None:
-                    return ("start_game", self.pets[self.selected_index])
+            for i, button in enumerate(self.pet_buttons):
+                if button.check_click(event):
+                    self.selected_pet = self.pets[i]
 
-            if self.back_button.check_click(event):
-                return "back"
+            if event.type == pygame.MOUSEWHEEL:
+                self.scroll_offset -= event.y
+                self.scroll_offset = max(0, min(self.scroll_offset, len(self.pets) - self.max_visible_pets))
 
-        # Hover effects for buttons (optional)
-        self.start_button.check_hover(mouse_pos)
-        self.back_button.check_hover(mouse_pos)
+        self.button_start.check_hover(mouse_pos)
+        self.button_back.check_hover(mouse_pos)
+        for button in self.pet_buttons:
+            button.check_hover(mouse_pos)
 
         return None
 
-    # ------------------------------------------------------
     def draw(self, screen):
-        """Render the selector screen."""
-        screen.fill((40, 40, 60))
+        # 1. Draw Background
+        if self.background_img:
+            screen.blit(self.background_img, (0, 0))
+        else:
+            screen.fill((40, 40, 60))
 
-        # Title
-        title_surf = self.title_font.render("Choose Your Guinea Pig", True, (255, 255, 255))
-        title_rect = title_surf.get_rect(center=(self.screen_width // 2, 50))
-        screen.blit(title_surf, title_rect)
+        # 2. Draw Semi-Transparent Overlay for Readability
+        overlay = pygame.Surface((self.screen_width, self.screen_height))
+        overlay.set_alpha(100)
+        overlay.fill((0, 0, 0))
+        screen.blit(overlay, (0, 0))
 
-        # Draw pet rows
-        for i, rect in enumerate(self.pet_rects):
-            shifted_rect = rect.move(0, self.scroll_offset)
+        # 3. Draw Title with Shadow
+        title_text = self.title_font.render("Select Your Guinea Pig", True, WHITE)
+        shadow_text = self.title_font.render("Select Your Guinea Pig", True, BLACK)
+        title_rect = title_text.get_rect(center=(self.screen_width // 2, 50))
+        
+        screen.blit(shadow_text, (title_rect.x + 2, title_rect.y + 2))
+        screen.blit(title_text, title_rect)
 
-            # Background color depending on selection
-            if i == self.selected_index:
-                color = (255, 215, 0)  # selected
-            else:
-                color = (200, 200, 200)
+        if not self.pets:
+            no_pets_text = self.pet_font.render("No guinea pigs available!", True, (255, 100, 100))
+            screen.blit(no_pets_text, no_pets_text.get_rect(center=(self.screen_width // 2, 300)))
+        else:
+            for i, (pet, button) in enumerate(zip(self.pets, self.pet_buttons)):
+                # Highlight selected
+                if pet == self.selected_pet:
+                    highlight_rect = button.rect.inflate(6, 6)
+                    pygame.draw.rect(screen, GOLD, highlight_rect, 3, border_radius=15)
 
-            pygame.draw.rect(screen, color, shifted_rect, border_radius=10)
+                button.draw(screen)
 
-            # Pet name text
-            pet = self.pets[i]
-            name_text = pet.get("name", "Unnamed")
-            text_surf = self.font.render(name_text, True, (0, 0, 0))
-            text_rect = text_surf.get_rect(midleft=(shifted_rect.x + 15, shifted_rect.centery))
-            screen.blit(text_surf, text_rect)
+                # --- DRAW CONTENT ON BUTTON ---
+                
+                # 1. Draw Sprite (Left Side)
+                if pet['sprite']:
+                    sprite_rect = pet['sprite'].get_rect(
+                        midleft=(button.rect.left + 15, button.rect.centery)
+                    )
+                    screen.blit(pet['sprite'], sprite_rect)
 
-        # Draw buttons
-        self.start_button.draw(screen)
-        self.back_button.draw(screen)
+                # 2. Name (Top Right - Shifted to avoid sprite)
+                name_str = pet['name'][:20] + "..." if len(pet['name']) > 20 else pet['name']
+                name_surf = self.pet_font.render(name_str, True, WHITE)
+                # Position text starting after the sprite (approx 90px in)
+                screen.blit(name_surf, (button.rect.left + 90, button.rect.top + 15))
+
+                # 3. Stats (Bottom Right)
+                color_val = str(pet.get('color', 'unknown')).title()
+                color_text = self.info_font.render(f"Color: {color_val}", True, (200, 200, 200))
+                speed_text = self.info_font.render(f"Speed: {pet.get('speed', 50)}", True, (200, 200, 200))
+
+                screen.blit(color_text, (button.rect.left + 90, button.rect.bottom - 30))
+                screen.blit(speed_text, (button.rect.right - speed_text.get_width() - 20, button.rect.bottom - 30))
+
+        # Selected Panel (Bottom)
+        if self.selected_pet:
+            panel_y = self.screen_height - 200
+            panel_rect = pygame.Rect(50, panel_y, self.screen_width - 100, 80)
+            
+            pygame.draw.rect(screen, (30, 30, 50), panel_rect, border_radius=10)
+            pygame.draw.rect(screen, GOLD, panel_rect, 3, border_radius=10)
+
+            # Draw selected info
+            selected_text = self.pet_font.render("Selected:", True, GOLD)
+            name_text = self.pet_font.render(self.selected_pet['name'], True, WHITE)
+
+            screen.blit(selected_text, (panel_rect.x + 20, panel_y + 15))
+            screen.blit(name_text, (panel_rect.x + 20, panel_y + 45))
+            
+            # Draw sprite in panel too
+            if self.selected_pet['sprite']:
+                s_rect = self.selected_pet['sprite'].get_rect(midright=(panel_rect.right - 30, panel_rect.centery))
+                screen.blit(self.selected_pet['sprite'], s_rect)
+
+        self.button_start.draw(screen)
+        self.button_back.draw(screen)

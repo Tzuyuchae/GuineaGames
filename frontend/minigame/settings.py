@@ -1,6 +1,6 @@
 # Game Settings
 TILE_SIZE = 20
-FPS = 10
+FPS = 60
 
 # Colors
 BLACK = (0, 0, 0)

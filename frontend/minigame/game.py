@@ -1,10 +1,9 @@
 import pygame
-import sys
 import os
+import sys
 
-# ------------------------------------------------------------
-# Correct package imports — uses minigame package for all deps
-# ------------------------------------------------------------
+# --- Imports ---
+from minigame.button import Button
 from minigame.maze import Maze
 from minigame.player import Player
 from minigame.settings import *
@@ -12,139 +11,143 @@ from minigame.maze_generator import MazeGenerator
 from minigame.enemy import Enemy
 from minigame.fruits import Fruit
 
-# Path to assets 
 base_path = os.path.dirname(__file__)
-assets_path = os.path.join(base_path, "../assets/audio/")
+assets_path = os.path.join(base_path, "../../assets/audio/")
 
-
-class Game:
-    def __init__(self, selected_pig=None):
-        pygame.init()
-        pygame.mixer.init()
-
-        # Selected guinea pig coming from the selector screen
-        self.selected_pig = selected_pig
-        self.selected_pig_name = (
-            selected_pig.get("name", "Guinea Pig")
-            if isinstance(selected_pig, dict)
-            else "Guinea Pig"
-        )
-
+class Game: 
+    def __init__(self, selected_guinea_pig=None, player_inventory=None): 
+        pygame.mixer.init() 
         self.running = True
+        self.selected_guinea_pig = selected_guinea_pig
+        self.player_inventory = player_inventory
 
-        # ------------------------------------------------------------
-        # Build maze layout and entities
-        # ------------------------------------------------------------
+        # Screen Dimensions (Should match main.py)
+        self.SCREEN_WIDTH = 672
+        self.SCREEN_HEIGHT = 864
+
+        # 1. Load Styling Assets (Background)
+        self.background_img = self._load_background()
+        
+        # 2. Generate Maze
         generator = MazeGenerator(fruit_chance=0.1, seed=42)
         self.PACMAN_MAZE = generator.generate()
 
-        # Player
-        self.player = Player(seed=42)
+        # 3. Create Components
+        self.player = Player(seed=42, guinea_pig_data=selected_guinea_pig)
         self.PACMAN_MAZE = self.player.add_player(self.PACMAN_MAZE)
-
-        # Enemy
+        
         self.enemy = Enemy(seed=42)
         self.PACMAN_MAZE = self.enemy.add_enemies(self.PACMAN_MAZE)
-
-        # Fruits
+        
         self.fruit = Fruit(fruit_chance=0.1, seed=42)
         self.PACMAN_MAZE = self.fruit.add_fruits(self.PACMAN_MAZE)
 
-        # Maze renderer / logic object
         self.maze = Maze(self.PACMAN_MAZE)
+        
+        # 4. Calculate Centering Offsets
+        self.offset_x = (self.SCREEN_WIDTH - self.maze.width) // 2
+        self.offset_y = (self.SCREEN_HEIGHT - self.maze.height) // 2
+        
+        # 5. Setup 'Back' Button (Styled Gold/Red)
+        button_w = 200
+        button_h = 60
+        button_x = (self.SCREEN_WIDTH - button_w) // 2
+        button_y = self.SCREEN_HEIGHT - button_h - 30
+        
+        # Colors: (Normal, Hover, Text) -> Using Red theme for Back button
+        self.button_back = Button(button_x, button_y, button_w, button_h,
+                                  'BACK', (178, 34, 34), (200, 50, 50))
 
-        # Off-screen surface to draw maze onto; we center this in the main window
-        self.maze_surface = pygame.Surface((self.maze.width, self.maze.height))
+        self.play_music("music.wav")
 
-        pygame.font.init()
-        self.ui_font = pygame.font.Font(None, 32)
+    def _load_background(self):
+        """Loads and scales the title background."""
+        paths_to_check = [
+            os.path.join(base_path, "../../images/BG_Title.png"),
+            os.path.join(base_path, "../../Global Assets/Sprites/More Sprites/BG Art/Title/BG_Title.png")
+        ]
+        
+        for p in paths_to_check:
+            if os.path.exists(p):
+                try:
+                    img = pygame.image.load(p).convert()
+                    return pygame.transform.scale(img, (self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+                except:
+                    pass
+        return None
 
-        # -----------------------
-        # Movement / timing state
-        # -----------------------
-        self.move_dir = (0, 0)       # current direction as (dx, dy)
-        self.move_speed = 0.0        # tiles per second
-        self.move_progress = 0.0     # accumulated tile-progress this frame
+    def play_music(self, filename):
+        try:
+            pygame.mixer.music.load(os.path.join(assets_path, filename))
+            pygame.mixer.music.play(-1)
+        except pygame.error:
+            pass
 
-        # Tunable movement parameters — improved acceleration & instant start
-        self.BASE_SPEED = 1.6        # was 1.2 — starts moving immediately and a bit quicker
-        self.MAX_SPEED = 5         # was 3.0 — slightly higher top speed
-        self.ACCELERATION = 3.6      # was 2.0 — accelerates faster but still controlled
+    def update(self, events):
+        mouse_pos = pygame.mouse.get_pos()
 
+        for event in events:
+            if self.button_back.check_click(event):
+                self.running = False
 
-        # For dt calculation independent of main loop’s clock
-        self.last_time_ms = pygame.time.get_ticks()
+        self.button_back.check_hover(mouse_pos)
 
-        self.clock = pygame.time.Clock()
+        if self.running:
+            self.player.handle_input(self.maze)
+            self.enemy.move_towards_player(self.player.player_pos(), self.maze)
+            
+            self.check_lose()
+            self.check_win()
+            self.check_exit()
 
-    # ---------------------------------------------------------
-    # INPUT & GAME LOGIC
-    # ---------------------------------------------------------
-
-    def handle_player_movement(self, dt):
-        """
-        Continuous movement with acceleration:
-        - Hold a direction -> accelerate up to MAX_SPEED
-        - Release / change direction -> speed resets to BASE_SPEED
-        - Uses tile steps by calling player.move(dx, dy, maze)
-        """
-        keys = pygame.key.get_pressed()
-
-        # Determine desired direction based on keys
-        desired_dir = (0, 0)
-        if keys[pygame.K_UP] or keys[pygame.K_w]:
-            desired_dir = (0, -1)
-        elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
-            desired_dir = (0, 1)
-        elif keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            desired_dir = (-1, 0)
-        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            desired_dir = (1, 0)
-
-        if desired_dir == (0, 0):
-            # No movement key pressed: reset speed & progress
-            self.move_dir = (0, 0)
-            self.move_speed = 0.0
-            self.move_progress = 0.0
-            return
-
-        # New direction selected
-        if desired_dir != self.move_dir:
-            self.move_dir = desired_dir
-            # Start fresh at base speed
-            self.move_speed = self.BASE_SPEED
-            self.move_progress = 0.0
-        else:
-            # Same direction being held: accelerate
-            self.move_speed = min(
-                self.MAX_SPEED,
-                self.move_speed + self.ACCELERATION * dt
+            self.PACMAN_MAZE, collected_amount = self.fruit.if_collected(
+                (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
             )
+            
+            if collected_amount > 0 and self.player_inventory:
+                self.player_inventory.add_food('Banana', collected_amount)
+                print(f"Collected fruit! Total Food: {self.player_inventory.food}")
 
-        # Convert speed (tiles/sec) into tiles this frame
-        self.move_progress += self.move_speed * dt
+    def check_exit(self):
+        if (self.player.pos_x == 0 or self.player.pos_x == self.maze.cols - 1 or
+            self.player.pos_y == 0 or self.player.pos_y == self.maze.rows - 1):
+            print("Exited the maze!")
+            self.running = False
 
-        # For every whole tile worth of progress, move one step
-        while self.move_progress >= 1.0:
-            dx, dy = self.move_dir
-            self.player.move(dx, dy, self.maze)
-            self.move_progress -= 1.0
+    def draw(self, screen):
+        # 1. Draw Background
+        if self.background_img:
+            screen.blit(self.background_img, (0, 0))
+        else:
+            screen.fill((40, 40, 60)) # Fallback color
 
-    def handle_loops(self):
-        max_x = self.maze.cols - 1
-        max_y = self.maze.rows - 1
+        # 2. Draw Translucent Backdrop for Maze (Makes it pop)
+        backdrop_rect = pygame.Rect(
+            self.offset_x - 10, 
+            self.offset_y - 10, 
+            self.maze.width + 20, 
+            self.maze.height + 20
+        )
+        # Create a surface for transparency
+        s = pygame.Surface((backdrop_rect.width, backdrop_rect.height))
+        s.set_alpha(180) # Semi-transparent black
+        s.fill((0, 0, 0))
+        screen.blit(s, (backdrop_rect.x, backdrop_rect.y))
+        
+        # Draw Border around maze
+        pygame.draw.rect(screen, GOLD, backdrop_rect, 3, border_radius=5)
 
-        # Horizontal wrap tunnels
-        if self.maze.is_loop(max_x, self.player.pos_y, self.PACMAN_MAZE) and self.player.pos_x == max_x:
-            self.player.pos_x = 0
-        elif self.maze.is_loop(0, self.player.pos_y, self.PACMAN_MAZE) and self.player.pos_x == 0:
-            self.player.pos_x = max_x
+        # 3. Draw Game Elements
+        self.maze.draw(screen, self.offset_x, self.offset_y)
+        self.fruit.draw(screen, self.PACMAN_MAZE, self.offset_x, self.offset_y)
+        self.player.draw(screen, self.offset_x, self.offset_y)
+        self.enemy.draw(screen, self.offset_x, self.offset_y)
+        
+        # 4. Draw UI Elements
+        self.button_back.draw(screen)
 
-        # Vertical wrap tunnels (if present)
-        if self.maze.is_loop(self.player.pos_x, max_y, self.PACMAN_MAZE) and self.player.pos_y == max_y:
-            self.player.pos_y = 0
-        elif self.maze.is_loop(self.player.pos_x, 0, self.PACMAN_MAZE) and self.player.pos_y == 0:
-            self.player.pos_y = max_y
+        if self.selected_guinea_pig:
+            self._draw_guinea_pig_hud(screen)
 
     def check_lose(self):
         if self.player.player_pos() == self.enemy.enemy_pos():
@@ -156,112 +159,20 @@ class Game:
             print("You Win!")
             self.running = False
 
-    # ---------------------------------------------------------
-    # MAIN UPDATE LOOP (called by main.py)
-    # ---------------------------------------------------------
+    def _draw_guinea_pig_hud(self, screen):
+        try:
+            hud_font = pygame.font.SysFont('Arial', 20, bold=True)
+        except:
+            hud_font = pygame.font.Font(None, 24)
 
-    def update(self, events):
-        # Compute dt based on wall-clock time, clamp to avoid crazy spikes
-        now_ms = pygame.time.get_ticks()
-        dt = (now_ms - self.last_time_ms) / 1000.0
-        self.last_time_ms = now_ms
-        dt = min(dt, 0.05)
+        name = self.selected_guinea_pig.get('name', 'Unknown')
+        text = hud_font.render(f"Playing as: {name}", True, GOLD) 
+        text_rect = text.get_rect()
+        text_rect.centerx = self.SCREEN_WIDTH // 2
+        text_rect.top = self.offset_y - 40 # Float above maze
 
-        # ESC or Back button -> bail to homescreen
-        surf = pygame.display.get_surface()
-        back_rect = None
-        if surf is not None:
-            sw, sh = surf.get_size()
-            back_rect = pygame.Rect(sw - 120, 20, 100, 30)
-
-        for event in events:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                self.running = False
-            if event.type == pygame.MOUSEBUTTONDOWN and back_rect is not None:
-                if back_rect.collidepoint(event.pos):
-                    self.running = False
-
-        # Continuous movement with acceleration while holding keys
-        self.handle_player_movement(dt)
-
-        # ✅ Enemy chases player using the Maze object (has is_wall)
-        self.enemy.move_towards_player(
-            (self.player.pos_x, self.player.pos_y),
-            self.maze
-        )
-
-        # Game logic
-        self.check_lose()
-        self.check_win()
-        self.handle_loops()
-
-        if not self.running:
-            return "homescreen"
-
-        return None
-
-    # ---------------------------------------------------------
-    # DRAW
-    # ---------------------------------------------------------
-
-    def draw(self, screen):
-        # Draw maze and entities to the off-screen maze surface
-        self.maze_surface.fill(BLACK)
-        self.maze.draw(self.maze_surface)
-        self.player.draw(self.maze_surface)
-        self.enemy.draw(self.maze_surface)
-
-        # Fruit collision & redraw
-        self.PACMAN_MAZE = self.fruit.if_collected(
-            (self.player.pos_x, self.player.pos_y),
-            self.PACMAN_MAZE
-        )
-        self.fruit.draw(self.maze_surface, self.PACMAN_MAZE)
-
-        # Center maze_surface in the main window
-        screen.fill(BLACK)
-        sw, sh = screen.get_size()
-        mw, mh = self.maze_surface.get_size()
-        screen.blit(self.maze_surface, ((sw - mw) // 2, (sh - mh) // 2))
-
-        # Show which pig is being used
-        label = self.ui_font.render(
-            f"Playing as: {self.selected_pig_name}",
-            True,
-            (255, 255, 255)
-        )
-        screen.blit(label, (20, 20))
-
-        # Small BACK button in top-right, out of the maze’s way
-        back_rect = pygame.Rect(sw - 120, 20, 100, 30)
-        pygame.draw.rect(screen, (60, 60, 60), back_rect, border_radius=6)
-        pygame.draw.rect(screen, (200, 200, 200), back_rect, 2, border_radius=6)
-        back_text = self.ui_font.render("BACK", True, (255, 255, 255))
-        bt_rect = back_text.get_rect(center=back_rect.center)
-        screen.blit(back_text, bt_rect)
-
-    # ---------------------------------------------------------
-    # OPTIONAL STANDALONE RUNNER
-    # ---------------------------------------------------------
-
-    def run(self):
-        screen = pygame.display.set_mode((800, 600))
-        pygame.display.set_caption("Pac-Man Maze Game")
-
-        while self.running:
-            events = pygame.event.get()
-            for event in events:
-                if event.type == pygame.QUIT:
-                    self.running = False
-
-            result = self.update(events)
-            self.draw(screen)
-
-            if result == "homescreen":
-                self.running = False
-
-            pygame.display.flip()
-            self.clock.tick(FPS)
-
-        pygame.quit()
-        sys.exit()
+        # Draw styled box behind text
+        bg_rect = text_rect.inflate(20, 10)
+        pygame.draw.rect(screen, (0, 0, 0), bg_rect, border_radius=5)
+        pygame.draw.rect(screen, GOLD, bg_rect, 2, border_radius=5)
+        screen.blit(text, text_rect)

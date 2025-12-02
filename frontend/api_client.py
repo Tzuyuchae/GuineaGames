@@ -257,13 +257,13 @@ class APIClient:
         Returns:
             List of pet dictionaries
         """
-        return self._get(f"/pets/owner/{user_id}")
+        return self._get(f"/pets/user/{user_id}")
 
     def get_pet(self, pet_id: int) -> Dict[str, Any]:
         """
         Get a specific pet by ID.
 
-        Args:z
+        Args:
             pet_id: ID of the pet
 
         Returns:
@@ -729,19 +729,10 @@ class APIClient:
             True if connected, False otherwise
         """
         try:
-            # Try the simple root endpoint first
-            url = f"{self.base_url}/"
-            response = self.session.get(url, timeout=2)
-
-            # Debug print so you can see what's happening in the console
-            print(f"[API] check_connection -> {url} status {response.status_code}")
-
+            response = self.session.get(f"{self.base_url}/docs", timeout=2)
             return response.status_code == 200
-        except Exception as e:
-            # More explicit debug info
-            print(f"[API] check_connection FAILED: {e}")
+        except:
             return False
-
 
 
 # Singleton instance
