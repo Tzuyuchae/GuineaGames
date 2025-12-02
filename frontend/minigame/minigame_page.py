@@ -14,6 +14,7 @@ class MinigamePage:
     def __init__(self, user_id=1, player_inventory=None):
         self.state = 'selector'
         self.guinea_pig_selector = None
+        self.final_score_screen = None
         self.game_instance = None
         self.selected_guinea_pig = None
         self.user_id = user_id
@@ -31,7 +32,9 @@ class MinigamePage:
 
     def initialize_review_screen(self):
         """Initialize the review score screen."""
-        self.final_score_screen = FinalScoreScreen()
+        score = self.game_instance.collected_amount
+        total_fruit = self.player_inventory.food
+        self.final_score_screen = FinalScoreScreen(score, total_fruit)
 
     def update(self, events):
         if self.guinea_pig_selector is None:
@@ -77,15 +80,19 @@ class MinigamePage:
                 if not self.paused:
                     self.game_instance.update(events)
                     if not self.game_instance.running:
-                        self._reset_state()
-                        return 'homescreen'
+                        if self.final_score_screen is None:
+                            self.initialize_review_screen()
+                        self.state = 'reviewing_score'
+                        #self._reset_state()
+                        #return 'homescreen'
 
                 # Check if the game loop has finished (Win, Lose, or Back button)
                 # We check the .running attribute of the Game class
                 if not self.game_instance.running:
                     #self._reset_state()
                     #return 'homescreen'
-                    self.initialize_review_screen()
+                    if self.final_score_screen is None:
+                        self.initialize_review_screen()
                     self.state = 'reviewing_score'
 
         # --- LOGIC FOR REVIEW SCORE SCREEN ---

@@ -16,7 +16,7 @@ from minigame.settings import *
 class FinalScoreScreen:
     """Screen for reviewing the final score after a game."""
     
-    def __init__(self, screen_width=672, screen_height=864):
+    def __init__(self, score, total_fruit, screen_width=672, screen_height=864):
         """
         Initialize the score review screen.
         Args:
@@ -26,6 +26,10 @@ class FinalScoreScreen:
         self.screen_width = screen_width
         self.screen_height = screen_height
         
+        self.score = score
+        self.total_fruit = total_fruit
+        self.shown = None
+
         # Initialize font
         pygame.font.init()
         try:
@@ -35,12 +39,34 @@ class FinalScoreScreen:
             self.title_font = pygame.font.Font(None, 50)
             self.score_font = pygame.font.Font(None, 36)
         
+        # Load Assets
+        self.background_img = self._load_background()
+
         # Create home button
         self.button_home = Button(
             screen_width // 2 - 100, self.screen_height // 2 + 110, 
             200, 60,
             'HOME', (150, 0, 0), (200, 0, 0)
         )
+
+    def _load_background(self):
+        """Loads and scales the title background."""
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        # Check multiple locations
+        paths_to_check = [
+            os.path.join(base_path, "../../images/BG_Title.png"),
+            os.path.join(base_path, "../images/BG_Title.png"),
+            os.path.join(base_path, "../../Global Assets/Sprites/More Sprites/BG Art/Title/BG_Title.png")
+        ]
+        
+        for p in paths_to_check:
+            if os.path.exists(p):
+                try:
+                    img = pygame.image.load(p).convert()
+                    return pygame.transform.scale(img, (self.screen_width, self.screen_height))
+                except:
+                    pass
+        return None
 
     def update(self, events):
         """
@@ -61,15 +87,28 @@ class FinalScoreScreen:
     
     def draw(self, screen):
         """Draws the review screen."""
-        screen.fill((40, 40, 60))
-        
-        # Title
+        # 1. Draw Background
+        if self.background_img:
+            screen.blit(self.background_img, (0, 0))
+        else:
+            screen.fill((40, 40, 60))
+
+        # 2. Draw Semi-Transparent Overlay for Readability
+        overlay = pygame.Surface((self.screen_width, self.screen_height))
+        overlay.set_alpha(100)
+        overlay.fill((0, 0, 0))
+        screen.blit(overlay, (0, 0))
+
+        # 3. Draw Title with Shadow
         title_text = self.title_font.render("Exited the area!", True, WHITE)
-        title_rect = title_text.get_rect(center=(self.screen_width // 2, self.screen_height // 3))
+        shadow_text = self.title_font.render("Exited the area!", True, BLACK)
+        title_rect = title_text.get_rect(center=(self.screen_width // 2, self.screen_height // 5))
+        screen.blit(shadow_text, (title_rect.x + 2, title_rect.y + 2))
         screen.blit(title_text, title_rect)
 
         # Score text
-        score_text = self.score_font.render("Total Score: placeholder", True, WHITE)
+        score_text = self.score_font.render(f"Fruit Collected: {self.score}", True, WHITE)
+        total_fruit_text = self.score_font.render(f"Total Fruit: {self.total_fruit}", True, WHITE)
         text_rect = score_text.get_rect(center=(self.screen_width // 2, self.screen_height // 2))
 
         # Draw score box background
@@ -78,7 +117,8 @@ class FinalScoreScreen:
         pygame.draw.rect(screen, GOLD, bg_rect, 2, border_radius=5)
 
         # Draw score text
-        screen.blit(score_text, text_rect)
+        screen.blit(score_text, (text_rect.x, text_rect.y - 20))
+        screen.blit(total_fruit_text, (text_rect.x, text_rect.y + 20))
 
         # Draw Back button
         self.button_home.draw(screen)
