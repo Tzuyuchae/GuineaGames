@@ -1,9 +1,9 @@
 import pygame
 import tkinter as tk 
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 import random
 from datetime import datetime, timedelta
-import json
+import jsona
 
 
 
@@ -142,6 +142,7 @@ class BreedingApp:
         return alleles
 
     def _calculate_phenotype(self):
+        phenotype = {}
         if 'B' in self.genes['coat_color']:
             phenotype['coat_color'] = 'Brown'
         else:
@@ -222,12 +223,13 @@ class BreedingSystem:
         for i in range(num_babies):
             baby_genes = {}
             
+            # For each trait, perform Punnett square logic
             for trait in parent1.genes:
                 allele1 = random.choice(parent1.genes[trait])
                 allele2 = random.choice(parent2.genes[trait])
                 baby_genes[trait] = sorted([allele1, allele2], reverse=True)
             
-            # Generate baby name
+            # Generate default baby name (can be changed later)
             baby_name = f"{parent1.name[:3]}{parent2.name[:3]}_Baby{i+1}"
             baby = GuineaPig(baby_name, genes=baby_genes, birth_time=datetime.now())
             babies.append(baby)
@@ -247,6 +249,7 @@ class BreedingApp:
         self.root.title("Guinea Pig Breeding System")
         self.root.geometry("900x700")
         
+        # Initialize guinea pig population
         self.guinea_pigs = self._create_starter_population()
         self.selected_parent1 = None
         self.selected_parent2 = None
@@ -260,6 +263,7 @@ class BreedingApp:
         pigs = []
         for name in names:
             pig = GuineaPig(name)
+            # Make some adults by backdating birth time
             if random.random() > 0.3:
                 pig.birth_time = datetime.now() - timedelta(minutes=20)
             pigs.append(pig)
@@ -267,14 +271,16 @@ class BreedingApp:
     
     def _create_ui(self):
         """Create the user interface"""
-
+        # Title
         title = tk.Label(self.root, text="🐹 Guinea Pig Breeding Center 🐹", 
                         font=("Arial", 18, "bold"), pady=10)
         title.pack()
         
+        # Main container
         main_frame = tk.Frame(self.root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
+        # Left side - Parent 1 selection
         left_frame = tk.LabelFrame(main_frame, text="Parent 1", font=("Arial", 12, "bold"))
         left_frame.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
         
@@ -285,6 +291,7 @@ class BreedingApp:
         self.parent1_info = tk.Text(left_frame, height=8, width=35, font=("Courier", 8))
         self.parent1_info.pack(fill=tk.BOTH, padx=5, pady=5)
         
+        # Right side - Parent 2 selection
         right_frame = tk.LabelFrame(main_frame, text="Parent 2", font=("Arial", 12, "bold"))
         right_frame.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
         
@@ -295,31 +302,45 @@ class BreedingApp:
         self.parent2_info = tk.Text(right_frame, height=8, width=35, font=("Courier", 8))
         self.parent2_info.pack(fill=tk.BOTH, padx=5, pady=5)
         
+        # Configure grid weights
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         main_frame.rowconfigure(0, weight=1)
         
+        # Breed button
         breed_btn = tk.Button(self.root, text="🧬 BREED SELECTED PARENTS 🧬", 
                             command=self._breed_selected, font=("Arial", 14, "bold"),
                             bg="#4CAF50", fg="white", pady=10)
         breed_btn.pack(pady=10)
         
+        # Offspring display
         offspring_frame = tk.LabelFrame(self.root, text="Offspring", font=("Arial", 12, "bold"))
         offspring_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         self.offspring_text = tk.Text(offspring_frame, height=10, font=("Courier", 9))
         self.offspring_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        refresh_btn = tk.Button(self.root, text="🔄 Refresh Status", 
+        # Bottom button frame
+        button_frame = tk.Frame(self.root)
+        button_frame.pack(pady=5)
+        
+        # Refresh button
+        refresh_btn = tk.Button(button_frame, text="🔄 Refresh Status", 
                                command=self._update_guinea_pig_lists)
-        refresh_btn.pack(pady=5)
+        refresh_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Rename button
+        rename_btn = tk.Button(button_frame, text="✏️ Rename Guinea Pig", 
+                              command=self._rename_guinea_pig)
+        rename_btn.pack(side=tk.LEFT, padx=5)
     
     def _update_guinea_pig_lists(self):
         """Update the listboxes with current guinea pig status"""
-
+        # Clear listboxes
         self.parent1_listbox.delete(0, tk.END)
         self.parent2_listbox.delete(0, tk.END)
         
+        # Add guinea pigs to listboxes
         for pig in self.guinea_pigs:
             age = pig.get_age_stage()
             can_breed, reason = pig.can_breed()
@@ -373,6 +394,7 @@ class BreedingApp:
             messagebox.showwarning("Selection Error", "Cannot breed a guinea pig with itself!")
             return
         
+        # Check if both can breed
         can_breed1, reason1 = self.selected_parent1.can_breed()
         can_breed2, reason2 = self.selected_parent2.can_breed()
         
@@ -384,21 +406,79 @@ class BreedingApp:
             messagebox.showwarning("Breeding Error", f"Parent 2: {reason2}")
             return
         
+        # Perform breeding
         babies = BreedingSystem.breed(self.selected_parent1, self.selected_parent2)
         
+        # Let user name each baby
+        self._name_babies(babies)
+        
+        # Add babies to population
         self.guinea_pigs.extend(babies)
         
+        # Display offspring
         self._display_offspring(babies)
         
+        # Update lists
         self._update_guinea_pig_lists()
         
-        messagebox.showinfo("Success!", f" {len(babies)} baby guinea pigs were born! ")
+        messagebox.showinfo("Success!", f"🎉 {len(babies)} baby guinea pigs were born! 🎉")
+    
+    def _name_babies(self, babies):
+        """Allow user to name each baby guinea pig"""
+        for i, baby in enumerate(babies, 1):
+            # Show baby info dialog
+            default_name = baby.name
+            phenotype = baby.get_phenotype_string()
+            
+            new_name = simpledialog.askstring(
+                f"Name Baby #{i} of {len(babies)}", 
+                f"Baby's appearance:\n{phenotype}\n\nEnter a name for this guinea pig:",
+                initialvalue=default_name
+            )
+            
+            # If user provided a name, use it; otherwise keep default
+            if new_name and new_name.strip():
+                baby.name = new_name.strip()
+    
+    def _rename_guinea_pig(self):
+        """Rename a selected guinea pig"""
+        # Check which listbox has a selection
+        parent1_selection = self.parent1_listbox.curselection()
+        parent2_selection = self.parent2_listbox.curselection()
+        
+        selected_pig = None
+        if parent1_selection:
+            selected_pig = self.guinea_pigs[parent1_selection[0]]
+        elif parent2_selection:
+            selected_pig = self.guinea_pigs[parent2_selection[0]]
+        else:
+            messagebox.showwarning("Selection Error", "Please select a guinea pig to rename!")
+            return
+        
+        # Ask for new name
+        new_name = simpledialog.askstring(
+            "Rename Guinea Pig",
+            f"Current name: {selected_pig.name}\n\nEnter new name:",
+            initialvalue=selected_pig.name
+        )
+        
+        if new_name and new_name.strip():
+            selected_pig.name = new_name.strip()
+            self._update_guinea_pig_lists()
+            
+            # Refresh info displays if this pig was selected
+            if self.selected_parent1 and self.selected_parent1.id == selected_pig.id:
+                self._display_pig_info(self.selected_parent1, self.parent1_info)
+            if self.selected_parent2 and self.selected_parent2.id == selected_pig.id:
+                self._display_pig_info(self.selected_parent2, self.parent2_info)
+            
+            messagebox.showinfo("Success", f"Guinea pig renamed to: {selected_pig.name}")
     
     def _display_offspring(self, babies):
         """Display information about newborn guinea pigs"""
         self.offspring_text.delete(1.0, tk.END)
         
-        output = f"=== {len(babies)} NEW BABIES BORN ===\n"
+        output = f"=== {len(babies)} NEW BABIES BORN ===\n\n"
         
         for i, baby in enumerate(babies, 1):
             output += f"Baby #{i}: {baby.name}\n"
