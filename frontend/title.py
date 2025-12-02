@@ -1,58 +1,47 @@
+# frontend/title.py
+
 import pygame
 from frontend_button import Button
 from game_context import game_context
+import session  # central backend/player session state
 
-# Optional: Import API client for database connectivity
-try:
-    from api_client import api
-    API_AVAILABLE = True
-except ImportError:
-    API_AVAILABLE = False
-    print("API client not available. Run in standalone mode.")
+# Title button
+button_start = Button(pygame.Rect(300, 450, 200, 70), "Start")
 
-# A 'Back' button
-button_start = Button(pygame.Rect(400, 500, 200, 70), 'Start')
+# Fonts (lazy init so this works even if pygame wasn't fully set up yet)
+_TITLE_FONT = None
+_STATUS_FONT = None
 
-def _ensure_backend_user():
+
+def _init_fonts():
+    """Initialize fonts once."""
+    global _TITLE_FONT, _STATUS_FONT
+    if _TITLE_FONT is None or _STATUS_FONT is None:
+        pygame.font.init()
+        _TITLE_FONT = pygame.font.Font(None, 72)
+        _STATUS_FONT = pygame.font.Font(None, 24)
+
+
+def _sync_game_context_from_session():
     """
-    Make sure we have a backend user and store it in game_context.
-    For now, we can hard-code a simple test account.
+    Make sure game_context uses the same user as session/current_user.
+    This is the key glue between the backend and the rest of the frontend.
     """
-    if not API_AVAILABLE:
-        print("API unavailable; skipping backend user setup.")
-        return False
+    if not getattr(session, "api_available", False):
+        print("[TITLE] Backend not available; running in offline mode.")
+        return
 
-    # If we already created a user earlier in this run, skip
-    if game_context.user_id is not None:
-        return True
+    if session.current_user is None:
+        print("[TITLE] No current_user in session; running in offline mode.")
+        return
 
-    username = "test_player"
-    email = "test_player@example.com"
-    password = "password123"
-
-    try:
-        # Simple strategy:
-        # 1. Try to create the user.
-        # 2. If HTTP 400 because of duplicate, fall back to querying users and pick that one.
-        user = api.create_user(username, email, password)
-    except Exception as e:
-        print("create_user failed, trying to reuse existing user:", e)
-        try:
-            users = api.get_users()
-            existing = next((u for u in users if u["username"] == username), None)
-            if not existing:
-                print("No existing user found either.")
-                return False
-            user = existing
-        except Exception as e2:
-            print("Unable to get or create user:", e2)
-            return False
+    user = session.current_user
 
     game_context.user_id = user["id"]
-    game_context.username = user["username"]
-    game_context.email = user["email"]
-    print(f"Using backend user id={game_context.user_id}")
-    return True
+    game_context.username = user.get("username")
+    game_context.email = user.get("email")
+
+    print(f"[TITLE] Using backend user id={game_context.user_id}, username={game_context.username}")
 
 
 def title_update(events):
@@ -63,27 +52,44 @@ def title_update(events):
     for event in events:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if button_start.is_clicked(event):
-                print("Start button clicked")
+                print("[TITLE] Start button clicked")
 
-                # Try to connect to backend and set up the user
-                if API_AVAILABLE:
-                    ok = _ensure_backend_user()
-                    if not ok:
-                        print("Warning: could not set up backend user; continuing in offline mode")
-                return "homescreen"   # or 'guinea_pig_selector' if that’s your next page
+                # Keep everything in sync with the existing backend session
+                _sync_game_context_from_session()
+
+                # Frontend/main.py will see this and swap to homescreen
+                return "homescreen"
 
     return None
 
+
 def title_draw(screen):
-    """Draws the breeding page."""
-    # Draw the back button
+    """
+    Draw the title screen.
+    """
+    _init_fonts()
+
+    # Fill background
+    screen.fill((0, 0, 0))
+
+    # Draw game title text
+    title_text = "Guinea Games"
+    title_surf = _TITLE_FONT.render(title_text, True, (255, 255, 255))
+    title_rect = title_surf.get_rect(
+        center=(screen.get_width() // 2, screen.get_height() // 3)
+    )
+    screen.blit(title_surf, title_rect)
+
+    # Draw the Start button
     button_start.draw(screen)
 
-    # Optional: Display API connection status (commented out by default)
-    # if API_AVAILABLE:
-    #     font = pygame.font.Font(None, 24)
-    #     if api.check_connection():
-    #         status_text = font.render("API: Connected", True, (0, 128, 0))
-    #     else:
-    #         status_text = font.render("API: Offline", True, (255, 0, 0))
-    #     screen.blit(status_text, (10, 10))
+    # Optional: show backend status in top-left
+    status = "Backend: offline"
+    color = (220, 60, 60)
+    if getattr(session, "api_available", False):
+        status = f"Backend: connected (user: {session.current_user.get('username', 'unknown')})" \
+            if session.current_user else "Backend: connected"
+        color = (60, 220, 60)
+
+    status_surf = _STATUS_FONT.render(status, True, color)
+    screen.blit(status_surf, (10, 10))

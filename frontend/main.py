@@ -142,9 +142,17 @@ while running:
             active_minigame.draw(screen)
             
             if next_page == "homescreen":
+                # We’re done with the minigame; go back to homescreen
                 current_page = "homescreen"
                 active_minigame = None 
                 screen = pygame.display.set_mode((screen_width, screen_height))
+
+                # 🔁 NEW: sync coins from backend into player_inventory
+                if getattr(session, "api_available", False) and session.current_user is not None:
+                    # session.refresh_user() was already called inside the minigame
+                    new_balance = session.current_user.get("balance", player_inventory.coins)
+                    player_inventory.coins = new_balance
+                    print(f"[SYNC] Updated local coins to {player_inventory.coins} from backend balance.")
         else:
             current_page = "homescreen"
             screen = pygame.display.set_mode((screen_width, screen_height))

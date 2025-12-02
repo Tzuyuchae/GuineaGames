@@ -357,9 +357,12 @@ def homescreen_draw(screen, player_inventory=None):
     # --- NEW: Draw Popup Overlay ---
     if show_popup and popup_manager and selected_pig_stats:
         # Darken background
-        overlay = pygame.Surface((w, h))
-        overlay.set_alpha(128)
-        overlay.fill((0, 0, 0))
+
+        # FIX: use screen dimensions instead of undefined w, h
+        w, h = screen.get_width(), screen.get_height()
+
+        overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 140))   # Semi-transparent black
         screen.blit(overlay, (0, 0))
         
         # Draw popup content

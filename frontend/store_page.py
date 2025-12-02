@@ -1,9 +1,14 @@
 import pygame
 import sys
 import os
+import requests
 
 # --- Import Logic ---
 from store_module import Store, PlayerInventory
+
+# Backend session + API
+import session
+from api_client import api
 
 # --- Settings & Colors ---
 WHITE = (255, 255, 255)
@@ -12,7 +17,7 @@ GRAY = (200, 200, 200)
 GREEN = (50, 200, 50)
 BROWN = (139, 69, 19)
 GOLD = (255, 215, 0)
-PANEL_GRAY = (220, 220, 220) # <--- Moved this to the top!
+PANEL_GRAY = (220, 220, 220)
 
 font_title = None
 font_text = None
@@ -53,17 +58,49 @@ def store_update(events, player_inventory):
 
             # 2. Check Pig Buy Buttons
             start_x, start_y = 50, 100
+            # 2. Check Guinea Pig Buy Buttons
             for i, pig in enumerate(logic_store.pigs_for_sale):
-                card_x = start_x + (i * 240)
+                card_x = 30 + (i * 240)
                 # This rect must match the one in store_draw
                 btn_rect = pygame.Rect(card_x + 20, start_y + 140, 160, 30)
                 
-                if btn_rect.collidepoint(mouse_pos):
-                    if logic_store.buy_guinea_pig(player_inventory, i):
-                        print(f"Bought {pig.name}!")
-                    else:
-                        print("Not enough coins or error!")
-                    return None 
+            if btn_rect.collidepoint(mouse_pos):
+                if logic_store.buy_guinea_pig(player_inventory, i):
+                    print(f"Bought {pig.name}!")
+
+                    # 🔁 NEW: create this guinea pig in the backend if available
+                    if getattr(session, "api_available", False) and session.current_user is not None:
+                        try:
+                            user_id = session.current_user["id"]
+
+                            # Safely pull species/color from the pig object if they exist
+                            pig_name = getattr(pig, "name", "Guinea Pig")
+                            pig_species = getattr(pig, "species", "guinea_pig")
+                            pig_color = getattr(pig, "color", "brown")
+
+                            payload = {
+                                "name": pig_name,
+                                "species": pig_species,
+                                "color": pig_color,
+                                "owner_id": user_id,
+                            }
+
+                            resp = requests.post(
+                                "http://localhost:8000/pets/",
+                                json=payload,
+                                timeout=5,
+                            )
+                            resp.raise_for_status()
+                            created_pet = resp.json()
+                            print(f"[STORE] Created backend pet: {created_pet}")
+
+                        except Exception as e:
+                            print(f"Warning: could not create backend pet: {e}")
+                else:
+                    print("Not enough coins or error!")
+                return None
+
+
 
             # 3. Check Food Buy Buttons
             food_start_y = 350
@@ -75,10 +112,44 @@ def store_update(events, player_inventory):
                 if btn_rect.collidepoint(mouse_pos):
                     if logic_store.buy_food(player_inventory, name):
                         print(f"Bought {name}!")
+
+                        # 🔁 NEW: sync food purchase with backend if available
+                        if getattr(session, "api_available", False) and session.current_user is not None:
+                            try:
+                                user_id = session.current_user["id"]
+                                price = item.price
+
+                                # Record transaction (negative amount)
+                                api.create_transaction(
+                                    user_id=user_id,
+                                    transaction_type="food_purchase",
+                                    amount=-price,
+                                    description=f"Bought food item {name}",
+                                )
+
+                                # Optional: track food inventory in backend as well
+                                try:
+                                    api.add_inventory_item(
+                                        user_id=user_id,
+                                        item_name=name,
+                                        item_type="food",
+                                        quantity=1,
+                                    )
+                                except Exception as inv_err:
+                                    print(f"Warning: could not sync inventory item to backend: {inv_err}")
+
+                                # Refresh user + sync local coins
+                                session.refresh_user()
+                                new_balance = session.current_user.get("balance", player_inventory.coins)
+                                player_inventory.coins = new_balance
+                                print(f"[STORE SYNC] Coins after food purchase: {player_inventory.coins}")
+                            except Exception as e:
+                                print(f"Warning: could not sync store food purchase to backend: {e}")
                     else:
                         print("Not enough coins!")
                     return None
                 idx += 1
+
 
     return None
 

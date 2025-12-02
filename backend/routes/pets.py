@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas
@@ -7,20 +7,36 @@ import datetime
 
 router = APIRouter(prefix="/pets", tags=["Pets"])
 
-@router.post("/", response_model=schemas.Pet)
+@router.post("/", response_model=schemas.Pet, status_code=status.HTTP_201_CREATED)
 def create_pet(pet: schemas.PetCreate, db: Session = Depends(get_db)):
-    """Create a new pet for a user"""
-    # Verify user exists
-    user = db.query(models.User).filter(models.User.id == pet.owner_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    """
+    Create a new pet for a given owner.
+    We initialize some reasonable default stats; you can tune these.
+    """
+    # Optional: verify owner exists
+    owner = db.query(models.User).filter(models.User.id == pet.owner_id).first()
+    if not owner:
+        raise HTTPException(status_code=404, detail="Owner not found")
+
+    now = datetime.datetime.utcnow()
 
     db_pet = models.Pet(
-        owner_id=pet.owner_id,
         name=pet.name,
         species=pet.species,
-        color=pet.color
+        color=pet.color,
+        owner_id=pet.owner_id,
+        age_days=0,
+        health=100,
+        happiness=100,
+        hunger=0,
+        cleanliness=100,
+        points=0,
+        genetic_code=None,
+        speed=5,
+        endurance=5,
+        last_updated=now,
     )
+
     db.add(db_pet)
     db.commit()
     db.refresh(db_pet)
