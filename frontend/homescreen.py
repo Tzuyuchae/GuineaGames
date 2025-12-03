@@ -219,7 +219,7 @@ def homescreen_update(events, user_id):
 def homescreen_draw(screen, user_id):
     global last_api_fetch_time, cached_user_data, cached_inventory
 
-    # Fetch Sidebar Data
+    # 1. Fetch Sidebar Data (API check)
     now = time.time()
     if now - last_api_fetch_time > 2.0:
         try:
@@ -229,31 +229,50 @@ def homescreen_draw(screen, user_id):
         except:
             pass
 
+    # 2. Draw Background
     screen.fill(BLACK)
     screen.blit(background, BG_POS)
+    
+    # 3. Draw Houses & Labels
     mouse_pos = pygame.mouse.get_pos()
 
-    # Draw Glow
     for name, data in house_data.items():
         rect = data["rect"]
         glow = data["glow"]
         
+        # Check if mouse is over the building
         hovering = False
         if not show_popup:
             if rect.collidepoint(mouse_pos):
                 hovering = True
 
         if hovering:
+            # --- DRAW GLOW ---
             gx = rect.x - (glow.get_width() - rect.width) // 2
             gy = rect.y - (glow.get_height() - rect.height) // 2
             screen.blit(glow, (gx, gy))
 
-    # Draw Pigs
+            # --- DRAW LABELS (This part was missing!) ---
+            # 1. Format the name (e.g. "mini_games" -> "Mini Games")
+            display_name = name.replace("_", " ").title()
+            
+            # 2. Render the text (White with Black shadow)
+            text_surf = font.render(display_name, True, (255, 255, 255))
+            shadow_surf = font.render(display_name, True, (0, 0, 0))
+            
+            # 3. Calculate center position
+            text_rect = text_surf.get_rect(center=rect.center)
+            
+            # 4. Draw Shadow first, then Text
+            screen.blit(shadow_surf, (text_rect.x + 2, text_rect.y + 2))
+            screen.blit(text_surf, text_rect)
+
+    # 4. Draw Pigs
     visual_pigs.sort(key=lambda p: p.rect.centery)
     for sprite in visual_pigs:
         sprite.draw(screen)
 
-    # Draw Sidebar
+    # 5. Draw Sidebar
     w, h = screen.get_size()
     pygame.draw.rect(screen, PANEL_GRAY, (w - 180, 20, 160, 220))
     real_clock = datetime.datetime.now().strftime("%I:%M %p")
@@ -280,7 +299,7 @@ def homescreen_draw(screen, user_id):
         screen.blit(text_surface, (w - 170, y))
         y += 20
 
-    # Draw Popup
+    # 6. Draw Popup
     if show_popup and popup_manager and selected_pig_stats:
         overlay = pygame.Surface((w, h))
         overlay.set_alpha(128)
