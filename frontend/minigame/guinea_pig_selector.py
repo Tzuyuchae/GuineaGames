@@ -63,11 +63,10 @@ class GuineaPigSelector:
     def _load_background(self):
         """Loads and scales the title background."""
         base_path = os.path.dirname(os.path.abspath(__file__))
-        # Check multiple locations
         paths_to_check = [
+            os.path.join(base_path, "../../Global Assets/Sprites/More Sprites/BG Art/Title/BG_Title.png"),
             os.path.join(base_path, "../../images/BG_Title.png"),
-            os.path.join(base_path, "../images/BG_Title.png"),
-            os.path.join(base_path, "../../Global Assets/Sprites/More Sprites/BG Art/Title/BG_Title.png")
+            os.path.join(base_path, "../images/BG_Title.png")
         ]
         
         for p in paths_to_check:
@@ -75,8 +74,7 @@ class GuineaPigSelector:
                 try:
                     img = pygame.image.load(p).convert()
                     return pygame.transform.scale(img, (self.screen_width, self.screen_height))
-                except:
-                    pass
+                except: pass
         return None
 
     def _load_default_sprite(self):
@@ -93,52 +91,78 @@ class GuineaPigSelector:
                 try:
                     img = pygame.image.load(p).convert_alpha()
                     return pygame.transform.scale(img, (60, 60))
-                except:
-                    pass
+                except: pass
         
-        # Fallback surface if image fails
         s = pygame.Surface((60, 60))
         s.fill((150, 75, 0))
         return s
 
+    def _get_pet_sprite(self, pig_data):
+        """Finds and loads the specific sprite based on color."""
+        # 1. Determine Color
+        color = "white"
+        if isinstance(pig_data, dict):
+            # API Dictionary
+            color = pig_data.get('color_phenotype', pig_data.get('color', 'White')).lower()
+        else:
+            # Legacy Object
+            if hasattr(pig_data, 'phenotype') and isinstance(pig_data.phenotype, dict):
+                color = pig_data.phenotype.get('coat_color', 'white').lower()
+            elif hasattr(pig_data, 'color'):
+                color = str(pig_data.color).lower()
+
+        # 2. Pick Filename
+        filename = "SH_GP_White_01.png" # Default
+        if "brown" in color: filename = "SH_GP_Brown_01.png"
+        elif "orange" in color: filename = "SH_GP_Orange_01.png"
+        
+        # 3. Build Path
+        # Base = frontend/minigame -> go up to frontend -> Global Assets
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", "SH_GP_Sprites", "SH_GP_Sprites", filename)
+        
+        # 4. Load
+        try:
+            if os.path.exists(path):
+                img = pygame.image.load(path).convert_alpha()
+                return pygame.transform.scale(img, (60, 60))
+        except: pass
+        
+        return self.default_sprite
+
     def _load_pets(self):
         self.pets = []
 
-        # 1. Check Local Inventory
         if self.inventory_pigs and len(self.inventory_pigs) > 0:
-            for pig_obj in self.inventory_pigs:
-                # Basic Info
-                pet_dict = {
-                    'id': getattr(pig_obj, 'id', random.randint(1000,9999)),
-                    'name': getattr(pig_obj, 'name', 'Unknown'),
-                    'species': 'guinea_pig',
-                    'color': 'brown', 
-                    'speed': 50,      
-                    'health': 100,
-                    'happiness': 100,
-                    'sprite': None
-                }
-
-                # Get Sprite: Check if object already has one, else use default
-                if hasattr(pig_obj, 'image') and pig_obj.image:
-                    # Scale existing image to button size
-                    pet_dict['sprite'] = pygame.transform.scale(pig_obj.image, (60, 60))
+            for pig in self.inventory_pigs:
+                # Handle Dictionary (API Data)
+                if isinstance(pig, dict):
+                    pet_dict = {
+                        'id': pig.get('id', random.randint(1000,9999)),
+                        'name': pig.get('name', 'Unknown'),
+                        'species': pig.get('species', 'guinea_pig'),
+                        'color': pig.get('color_phenotype', pig.get('color', 'brown')),
+                        'speed': pig.get('speed', 50),
+                        'health': pig.get('health', 100),
+                        # Load smart sprite here!
+                        'sprite': self._get_pet_sprite(pig)
+                    }
+                # Handle Object (Legacy Data)
                 else:
-                    pet_dict['sprite'] = self.default_sprite
-
-                # Extract Stats
-                if hasattr(pig_obj, 'phenotype') and isinstance(pig_obj.phenotype, dict):
-                    pet_dict['color'] = pig_obj.phenotype.get('coat_color', 'brown')
-                
-                if hasattr(pig_obj, 'score'):
-                    # Simple logic: Score 100->40 speed, 500->80 speed
-                    pet_dict['speed'] = int(40 + (pig_obj.score / 500) * 40)
-                elif hasattr(pig_obj, 'speed'):
-                    pet_dict['speed'] = pig_obj.speed
+                    pet_dict = {
+                        'id': getattr(pig, 'id', random.randint(1000,9999)),
+                        'name': getattr(pig, 'name', 'Unknown'),
+                        'species': 'guinea_pig',
+                        'color': 'brown',
+                        'speed': getattr(pig, 'speed', 50),
+                        'health': 100,
+                        # Load smart sprite here!
+                        'sprite': self._get_pet_sprite(pig)
+                    }
 
                 self.pets.append(pet_dict)
 
-        # 2. Fallback Mock Data
+        # Fallback Mock Data
         else:
             self.pets = self._get_mock_pets()
 
@@ -203,19 +227,16 @@ class GuineaPigSelector:
         return None
 
     def draw(self, screen):
-        # 1. Draw Background
         if self.background_img:
             screen.blit(self.background_img, (0, 0))
         else:
             screen.fill((40, 40, 60))
 
-        # 2. Draw Semi-Transparent Overlay for Readability
         overlay = pygame.Surface((self.screen_width, self.screen_height))
         overlay.set_alpha(100)
         overlay.fill((0, 0, 0))
         screen.blit(overlay, (0, 0))
 
-        # 3. Draw Title with Shadow
         title_text = self.title_font.render("Select Your Guinea Pig", True, WHITE)
         shadow_text = self.title_font.render("Select Your Guinea Pig", True, BLACK)
         title_rect = title_text.get_rect(center=(self.screen_width // 2, 50))
@@ -228,29 +249,26 @@ class GuineaPigSelector:
             screen.blit(no_pets_text, no_pets_text.get_rect(center=(self.screen_width // 2, 300)))
         else:
             for i, (pet, button) in enumerate(zip(self.pets, self.pet_buttons)):
-                # Highlight selected
                 if pet == self.selected_pet:
                     highlight_rect = button.rect.inflate(6, 6)
                     pygame.draw.rect(screen, GOLD, highlight_rect, 3, border_radius=15)
 
                 button.draw(screen)
 
-                # --- DRAW CONTENT ON BUTTON ---
-                
-                # 1. Draw Sprite (Left Side)
+                # 1. Draw Sprite
                 if pet['sprite']:
                     sprite_rect = pet['sprite'].get_rect(
                         midleft=(button.rect.left + 15, button.rect.centery)
                     )
                     screen.blit(pet['sprite'], sprite_rect)
 
-                # 2. Name (Top Right - Shifted to avoid sprite)
-                name_str = pet['name'][:20] + "..." if len(pet['name']) > 20 else pet['name']
+                # 2. Name
+                name_str = str(pet['name'])
+                if len(name_str) > 20: name_str = name_str[:20] + "..."
                 name_surf = self.pet_font.render(name_str, True, WHITE)
-                # Position text starting after the sprite (approx 90px in)
                 screen.blit(name_surf, (button.rect.left + 90, button.rect.top + 15))
 
-                # 3. Stats (Bottom Right)
+                # 3. Stats
                 color_val = str(pet.get('color', 'unknown')).title()
                 color_text = self.info_font.render(f"Color: {color_val}", True, (200, 200, 200))
                 speed_text = self.info_font.render(f"Speed: {pet.get('speed', 50)}", True, (200, 200, 200))
@@ -258,7 +276,7 @@ class GuineaPigSelector:
                 screen.blit(color_text, (button.rect.left + 90, button.rect.bottom - 30))
                 screen.blit(speed_text, (button.rect.right - speed_text.get_width() - 20, button.rect.bottom - 30))
 
-        # Selected Panel (Bottom)
+        # Selected Panel
         if self.selected_pet:
             panel_y = self.screen_height - 200
             panel_rect = pygame.Rect(50, panel_y, self.screen_width - 100, 80)
@@ -266,14 +284,12 @@ class GuineaPigSelector:
             pygame.draw.rect(screen, (30, 30, 50), panel_rect, border_radius=10)
             pygame.draw.rect(screen, GOLD, panel_rect, 3, border_radius=10)
 
-            # Draw selected info
             selected_text = self.pet_font.render("Selected:", True, GOLD)
-            name_text = self.pet_font.render(self.selected_pet['name'], True, WHITE)
+            name_text = self.pet_font.render(str(self.selected_pet['name']), True, WHITE)
 
             screen.blit(selected_text, (panel_rect.x + 20, panel_y + 15))
             screen.blit(name_text, (panel_rect.x + 20, panel_y + 45))
             
-            # Draw sprite in panel too
             if self.selected_pet['sprite']:
                 s_rect = self.selected_pet['sprite'].get_rect(midright=(panel_rect.right - 30, panel_rect.centery))
                 screen.blit(self.selected_pet['sprite'], s_rect)

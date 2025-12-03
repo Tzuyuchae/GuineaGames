@@ -7,6 +7,7 @@ import random
 # --- Imports ---
 from guineapig import GuineaPigSprite
 from details_popup import DetailsPopup
+from api_client import api
 
 # --- Colors ---
 PANEL_GRAY = (235, 235, 235)
@@ -27,11 +28,16 @@ game_time = {
 REAL_SECONDS_PER_GAME_MINUTE = 0.07
 last_update = 0
 
-# --- Popup State ---
+# --- State ---
 show_popup = False
 popup_manager = None
 visual_pigs = [] 
-last_inventory_count = -1 
+selected_pig_stats = None
+
+# --- API Caching ---
+last_api_fetch_time = 0
+cached_user_data = None
+cached_inventory = None
 
 def make_glow(mask, intensity=22):
     """Soft, translucent Stardew-style glow."""
@@ -63,7 +69,9 @@ def homescreen_init(screen_w, screen_h):
 
     try:
         raw_bg = pygame.image.load(bg_path).convert_alpha()
+        print("Background loaded successfully.")
     except FileNotFoundError:
+        print("ERROR: BG_Home.png not found. Creating placeholder.")
         raw_bg = pygame.Surface((800, 600))
         raw_bg.fill((100, 100, 200)) 
 
@@ -93,54 +101,71 @@ def homescreen_init(screen_w, screen_h):
         
         sx = int(ox * scale) + BG_POS[0]
         sy = int(oy * scale) + BG_POS[1]
-        house_data[name] = {"rect": pygame.Rect(sx, sy, sw, sh), "img": house_img, "mask": mask, "glow": glow}
+        
+        rect = pygame.Rect(sx, sy, sw, sh)
+        house_data[name] = {"rect": rect, "img": house_img, "mask": mask, "glow": glow}
 
-def refresh_visual_pigs(inventory_list):
+def refresh_visual_pigs(user_id):
     """
-    Rebuilds the list of visual sprites based on inventory data.
-    Ensures pigs do not spawn on top of buildings.
+    Fetch pets from API and update sprites.
+    SMART UPDATE: Updates existing sprites with new data (like name changes)
+    instead of deleting/recreating them.
     """
     global visual_pigs, house_data
-    visual_pigs = []
     
-    # Use mostly the bottom-right area of the screen to avoid the top houses
+    try:
+        my_pets = api.get_user_pets(user_id)
+    except Exception:
+        return
+
+    # Map existing sprites by ID so we can update them in place
+    existing_sprites = {s.data['id']: s for s in visual_pigs}
+    new_visual_pigs = []
+    
     yard_min_x, yard_max_x = 50, 650
     yard_min_y, yard_max_y = 300, 800
     
-    for pig_data in inventory_list:
-        valid_spot = False
-        attempts = 0
+    for pet_data in my_pets:
+        pid = pet_data['id']
         
-        # Try up to 20 times to find a spot not on a building
-        while not valid_spot and attempts < 20:
-            rx = random.randint(yard_min_x, yard_max_x)
-            ry = random.randint(yard_min_y, yard_max_y)
+        if pid in existing_sprites:
+            # Update existing sprite with new data (e.g. new name)
+            sprite = existing_sprites[pid]
+            sprite.data = pet_data 
+            new_visual_pigs.append(sprite)
+        else:
+            # Create new sprite for new pet
+            valid_spot = False
+            attempts = 0
             
-            # Create a rect for the potential pig (approx 60x60)
-            # Note: Sprite uses bottomleft=(rx, ry), so the rect goes UP from ry
-            potential_rect = pygame.Rect(rx, ry - 60, 60, 60)
-            
-            collision = False
-            for house_info in house_data.values():
-                # Inflate house rect slightly so they don't even touch the edges
-                if potential_rect.colliderect(house_info["rect"].inflate(10, 10)):
-                    collision = True
-                    break
-            
-            if not collision:
-                valid_spot = True
-            
-            attempts += 1
-            
-        # If we failed to find a spot, put them in a default safe corner (bottom right)
-        if not valid_spot:
-            rx, ry = 600, 800
+            while not valid_spot and attempts < 20:
+                rx = random.randint(yard_min_x, yard_max_x)
+                ry = random.randint(yard_min_y, yard_max_y)
+                potential_rect = pygame.Rect(rx, ry - 60, 60, 60)
+                
+                collision = False
+                for house_info in house_data.values():
+                    if potential_rect.colliderect(house_info["rect"].inflate(10, 10)):
+                        collision = True
+                        break
+                
+                if not collision:
+                    valid_spot = True
+                attempts += 1
+                
+            if not valid_spot:
+                rx, ry = 600, 800
 
-        sprite = GuineaPigSprite(rx, ry, pig_data)
-        visual_pigs.append(sprite)
+            sprite = GuineaPigSprite(rx, ry, pet_data)
+            new_visual_pigs.append(sprite)
 
-def homescreen_update(events):
+    visual_pigs = new_visual_pigs
+
+def homescreen_update(events, user_id):
     global last_update, game_time, show_popup, selected_pig_stats
+
+    # Check for updates (renames, new pets)
+    refresh_visual_pigs(user_id)
 
     if show_popup:
         for event in events:
@@ -149,9 +174,9 @@ def homescreen_update(events):
                 show_popup = False
         return None
 
+    # Time Logic
     now = time.time()
     if last_update == 0: last_update = now
-
     if now - last_update >= REAL_SECONDS_PER_GAME_MINUTE:
         last_update = now
         game_time["minute"] += 1
@@ -175,6 +200,7 @@ def homescreen_update(events):
             clicked_pig = False
             for sprite in reversed(visual_pigs):
                 if sprite.is_clicked(mouse_pos):
+                    # Fetch stats FRESH from the sprite (which has fresh data now)
                     selected_pig_stats = sprite.get_stats()
                     show_popup = True
                     clicked_pig = True
@@ -186,57 +212,54 @@ def homescreen_update(events):
             # 2. Check Building Clicks
             for name, data in house_data.items():
                 rect = data["rect"]
-                mask = data["mask"]
-                lx = mouse_pos[0] - rect.x
-                ly = mouse_pos[1] - rect.y
-                if 0 <= lx < rect.width and 0 <= ly < rect.height:
-                    if mask.get_at((lx, ly)):
-                        return name
+                if rect.collidepoint(mouse_pos):
+                    return name
     return None
 
-def homescreen_draw(screen, player_inventory=None):
-    global last_inventory_count
+def homescreen_draw(screen, user_id):
+    global last_api_fetch_time, cached_user_data, cached_inventory
 
-    if player_inventory:
-        current_count = len(player_inventory.owned_pigs)
-        if current_count != last_inventory_count:
-            refresh_visual_pigs(player_inventory.owned_pigs)
-            last_inventory_count = current_count
+    # Fetch Sidebar Data
+    now = time.time()
+    if now - last_api_fetch_time > 2.0:
+        try:
+            cached_user_data = api.get_user(user_id)
+            cached_inventory = api.get_user_inventory(user_id)
+            last_api_fetch_time = now
+        except:
+            pass
 
     screen.fill(BLACK)
     screen.blit(background, BG_POS)
     mouse_pos = pygame.mouse.get_pos()
 
+    # Draw Glow
     for name, data in house_data.items():
         rect = data["rect"]
-        mask = data["mask"]
         glow = data["glow"]
         
         hovering = False
         if not show_popup:
-            lx = mouse_pos[0] - rect.x
-            ly = mouse_pos[1] - rect.y
-            if 0 <= lx < rect.width and 0 <= ly < rect.height and mask.get_at((lx, ly)):
+            if rect.collidepoint(mouse_pos):
                 hovering = True
 
         if hovering:
             gx = rect.x - (glow.get_width() - rect.width) // 2
             gy = rect.y - (glow.get_height() - rect.height) // 2
-            glow_rect = pygame.Rect(gx, gy, glow.get_width(), glow.get_height())
-            clipped = glow_rect.clip(screen.get_rect())
-            if clipped.width > 0 and clipped.height > 0:
-                screen.blit(glow, clipped.topleft, pygame.Rect(clipped.x - gx, clipped.y - gy, clipped.width, clipped.height))
+            screen.blit(glow, (gx, gy))
 
+    # Draw Pigs
     visual_pigs.sort(key=lambda p: p.rect.centery)
     for sprite in visual_pigs:
         sprite.draw(screen)
 
+    # Draw Sidebar
     w, h = screen.get_size()
     pygame.draw.rect(screen, PANEL_GRAY, (w - 180, 20, 160, 220))
     real_clock = datetime.datetime.now().strftime("%I:%M %p")
 
-    coins = player_inventory.coins if player_inventory else 0
-    food = player_inventory.food if player_inventory else 0
+    coins = cached_user_data['balance'] if cached_user_data else 0
+    food_count = sum(item['quantity'] for item in cached_inventory) if cached_inventory else 0
     
     sidebar_lines = [
         f"Year: {game_time['year']}",
@@ -246,7 +269,7 @@ def homescreen_draw(screen, player_inventory=None):
         f"{real_clock}",
         "",
         f"Coins: {coins}",
-        f"Food: {food}",
+        f"Food: {food_count}",
         "",
         f"Pets: {len(visual_pigs)}",
     ]
@@ -257,6 +280,7 @@ def homescreen_draw(screen, player_inventory=None):
         screen.blit(text_surface, (w - 170, y))
         y += 20
 
+    # Draw Popup
     if show_popup and popup_manager and selected_pig_stats:
         overlay = pygame.Surface((w, h))
         overlay.set_alpha(128)

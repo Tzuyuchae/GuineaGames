@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-import models, schemas, json
+import models, schemas, json, traceback
 from genetics import BreedingEngine, GeneticCode, PunnettSquare, initialize_genetics_system
 
 router = APIRouter(prefix="/genetics", tags=["Genetics"])
@@ -150,24 +150,25 @@ def get_decoded_genetics(pet_id: int, db: Session = Depends(get_db)):
 @router.post("/breed/", response_model=schemas.BreedingOutcome)
 def breed_pets(breeding_request: schemas.BreedingRequest, db: Session = Depends(get_db)):
     """Breed two pets and generate offspring with inherited genetics"""
-    # Verify both parents exist
-    parent1 = db.query(models.Pet).filter(models.Pet.id == breeding_request.parent1_id).first()
-    parent2 = db.query(models.Pet).filter(models.Pet.id == breeding_request.parent2_id).first()
-
-    if not parent1 or not parent2:
-        raise HTTPException(status_code=404, detail="One or both parents not found")
-
-    if parent1.owner_id != breeding_request.owner_id or parent2.owner_id != breeding_request.owner_id:
-        raise HTTPException(status_code=403, detail="You must own both parents to breed them")
-
     try:
+        # Verify both parents exist
+        parent1 = db.query(models.Pet).filter(models.Pet.id == breeding_request.parent1_id).first()
+        parent2 = db.query(models.Pet).filter(models.Pet.id == breeding_request.parent2_id).first()
+
+        if not parent1 or not parent2:
+            raise HTTPException(status_code=404, detail="One or both parents not found")
+
+        # Use defaults if optional fields are missing
+        child_species = breeding_request.child_species if breeding_request.child_species else "Guinea Pig"
+        child_color = breeding_request.child_color if breeding_request.child_color else "Mixed"
+
         offspring, punnett_squares, inheritance_summary = BreedingEngine.breed(
             db,
             parent1,
             parent2,
             breeding_request.child_name,
-            breeding_request.child_species,
-            breeding_request.child_color,
+            child_species,
+            child_color,
             breeding_request.owner_id
         )
 
@@ -183,11 +184,11 @@ def breed_pets(breeding_request: schemas.BreedingRequest, db: Session = Depends(
                 punnett_square=ps["punnett_square"]
             ))
 
+        # FIX: Only use stats that exist in models.Pet (Removed Strength/Intelligence)
         estimated_stats = {
             "speed": offspring.speed,
-            "strength": offspring.strength,
-            "intelligence": offspring.intelligence,
-            "endurance": offspring.endurance
+            "endurance": offspring.endurance,
+            "rarity": offspring.rarity_score
         }
 
         return schemas.BreedingOutcome(
@@ -202,6 +203,8 @@ def breed_pets(breeding_request: schemas.BreedingRequest, db: Session = Depends(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        print("CRITICAL BREEDING ERROR:")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Breeding failed: {str(e)}")
 
 @router.get("/breeding-history/{pet_id}")
@@ -299,12 +302,11 @@ def get_pet_stats(pet_id: int, db: Session = Depends(get_db)):
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
 
-    genetic_score = int((pet.speed + pet.strength + pet.intelligence + pet.endurance) / 4)
+    # Fix: Calculate based on available stats
+    genetic_score = int((pet.speed + pet.endurance) / 2)
 
     return schemas.PetStatsSchema(
         speed=pet.speed,
-        strength=pet.strength,
-        intelligence=pet.intelligence,
         endurance=pet.endurance,
         genetic_score=genetic_score
     )
@@ -318,16 +320,15 @@ def compare_pet_stats(pet1_id: int, pet2_id: int, db: Session = Depends(get_db))
     if not pet1 or not pet2:
         raise HTTPException(status_code=404, detail="One or both pets not found")
 
-    pet1_score = (pet1.speed + pet1.strength + pet1.intelligence + pet1.endurance) / 4
-    pet2_score = (pet2.speed + pet2.strength + pet2.intelligence + pet2.endurance) / 4
+    # Fix: Calculate based on available stats
+    pet1_score = (pet1.speed + pet1.endurance) / 2
+    pet2_score = (pet2.speed + pet2.endurance) / 2
 
     return {
         "pet1": {
             "id": pet1.id,
             "name": pet1.name,
             "speed": pet1.speed,
-            "strength": pet1.strength,
-            "intelligence": pet1.intelligence,
             "endurance": pet1.endurance,
             "genetic_score": pet1_score
         },
@@ -335,8 +336,6 @@ def compare_pet_stats(pet1_id: int, pet2_id: int, db: Session = Depends(get_db))
             "id": pet2.id,
             "name": pet2.name,
             "speed": pet2.speed,
-            "strength": pet2.strength,
-            "intelligence": pet2.intelligence,
             "endurance": pet2.endurance,
             "genetic_score": pet2_score
         },

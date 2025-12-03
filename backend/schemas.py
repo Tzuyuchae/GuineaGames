@@ -54,6 +54,7 @@ class PetUpdate(BaseModel):
     happiness: Optional[int] = None
     hunger: Optional[int] = None
     cleanliness: Optional[int] = None
+    age_days: Optional[int] = None
 
 # =====================
 # INVENTORY SCHEMAS
@@ -225,8 +226,8 @@ class BreedingRequest(BaseModel):
     parent2_id: int
     owner_id: int
     child_name: str
-    child_species: str
-    child_color: str
+    child_species: Optional[str] = "Guinea Pig"
+    child_color: Optional[str] = "Mixed"
 
 class PunnettSquareResult(BaseModel):
     """Represents a Punnett square calculation result"""
@@ -237,15 +238,6 @@ class PunnettSquareResult(BaseModel):
     probabilities: dict
     punnett_square: List[List[str]]
 
-class BreedingOutcome(BaseModel):
-    """Complete breeding outcome with inherited genetics"""
-    child_id: int
-    child_name: str
-    child_genetics: str
-    punnett_squares: List[PunnettSquareResult]
-    estimated_stats: dict
-    inheritance_summary: str
-
 class PetStatsSchema(BaseModel):
     """Pet stats derived from genetics"""
     speed: int
@@ -254,6 +246,15 @@ class PetStatsSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+class BreedingOutcome(BaseModel):
+    """Complete breeding outcome with inherited genetics"""
+    child_id: int
+    child_name: str
+    child_genetics: Optional[str] = None
+    punnett_squares: List[PunnettSquareResult]
+    estimated_stats: dict
+    inheritance_summary: str
 
 # =====================
 # FOOD SYSTEM SCHEMAS

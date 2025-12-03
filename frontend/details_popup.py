@@ -1,12 +1,13 @@
 import pygame
-from frontend_button import Button 
+from frontend_button import Button
+from api_client import api 
 
 # Settings
 POPUP_BG = (245, 245, 245)
 BORDER_COLOR = (0, 0, 0)
 TEXT_COLOR = (0, 0, 0)
 INPUT_BG = (255, 255, 255)
-INPUT_BORDER = (70, 130, 180) # Blue
+INPUT_BORDER = (70, 130, 180) 
 
 class DetailsPopup:
     def __init__(self):
@@ -17,102 +18,109 @@ class DetailsPopup:
             self.font = pygame.font.Font(None, 24)
             self.title_font = pygame.font.Font(None, 32)
             
-        # Center popup
         self.rect = pygame.Rect(86, 232, 500, 400) 
         
-        # Buttons
         self.button_back = Button(pygame.Rect(236, 550, 200, 50), "BACK")
+        self.button_grow = Button(pygame.Rect(86, 550, 140, 50), "GROW (Dev)") # New Button
+        self.rename_rect = pygame.Rect(0, 0, 80, 30)
         
-        # Rename button (Small button next to name)
-        self.rename_rect = pygame.Rect(0, 0, 80, 30) # Positioned dynamically
-        
-        # State
         self.is_renaming = False
         self.current_input = ""
-        self.active_pig_data = None # Logic reference to modify name
+        self.active_pig_stats = None 
 
-    def draw(self, screen, pig_data):
-        # Store reference to allow renaming
-        self.active_pig_data = pig_data
+    def draw(self, screen, pig_stats):
+        self.active_pig_stats = pig_stats
 
-        # 1. Draw Popup Box
+        # 1. Box
         pygame.draw.rect(screen, POPUP_BG, self.rect, border_radius=12)
         pygame.draw.rect(screen, BORDER_COLOR, self.rect, 3, border_radius=12)
 
-        # 2. Handle Name / Renaming
-        name = pig_data.get("Name", "Unknown")
+        # 2. Name / Rename UI
+        name = pig_stats.get("Name", "Unknown")
         
         if self.is_renaming:
-            # Draw Input Box
             input_rect = pygame.Rect(self.rect.centerx - 100, self.rect.y + 20, 200, 40)
             pygame.draw.rect(screen, INPUT_BG, input_rect)
             pygame.draw.rect(screen, INPUT_BORDER, input_rect, 2)
             
-            # Draw typing text
             txt_surf = self.title_font.render(self.current_input, True, TEXT_COLOR)
             screen.blit(txt_surf, (input_rect.x + 5, input_rect.y + 5))
             
-            # Instruction
             hint = self.font.render("Press ENTER to save", True, (100, 100, 100))
             screen.blit(hint, (input_rect.centerx - hint.get_width()//2, input_rect.bottom + 5))
             
         else:
-            # Draw Title (Name)
             name_text = self.title_font.render(name, True, TEXT_COLOR)
             text_x = self.rect.centerx - (name_text.get_width() // 2)
             screen.blit(name_text, (text_x, self.rect.y + 20))
             
-            # Draw Rename Button ('Pencil' icon or text)
             self.rename_rect.topleft = (text_x + name_text.get_width() + 15, self.rect.y + 25)
-            # Simple "Edit" text button
             pygame.draw.rect(screen, (200, 200, 200), self.rename_rect, border_radius=5)
             edit_txt = self.font.render("Edit", True, (50, 50, 50))
             screen.blit(edit_txt, (self.rename_rect.x + 20, self.rename_rect.y))
 
-        # 3. Draw Image
-        if "image_surface" in pig_data and pig_data["image_surface"]:
-            img = pig_data["image_surface"]
+        # 3. Image
+        if "image_surface" in pig_stats and pig_stats["image_surface"]:
+            img = pig_stats["image_surface"]
             img = pygame.transform.scale(img, (120, 120))
             img_rect = img.get_rect(center=(self.rect.centerx, self.rect.y + 120))
             screen.blit(img, img_rect)
 
-        # 4. Draw Stats
+        # 4. Stats
         start_y = self.rect.y + 200
         stats_to_show = ["Age", "Hunger", "Speed", "Endurance"]
         
         for i, key in enumerate(stats_to_show):
-            val = pig_data.get(key, "N/A")
+            val = pig_stats.get(key, "N/A")
             stat_str = f"{key}: {val}"
             text_surf = self.font.render(stat_str, True, TEXT_COLOR)
             screen.blit(text_surf, (self.rect.x + 40, start_y + (i * 35)))
 
-        # 5. Draw Back Button
+        # 5. Buttons
         self.button_back.draw(screen)
+        self.button_grow.draw(screen)
 
     def handle_event(self, event):
-        # 1. Handle Back Button (if not renaming)
-        if not self.is_renaming and self.button_back.is_clicked(event):
-            return "close"
+        if not self.is_renaming:
+            if self.button_back.is_clicked(event):
+                return "close"
+            
+            # --- HANDLE GROW CLICK ---
+            if self.button_grow.is_clicked(event):
+                pet_id = self.active_pig_stats.get("pet_id")
+                if pet_id:
+                    print(f"Growing pet {pet_id}...")
+                    try:
+                        api.update_pet(pet_id, age_days=10) # Instant Adult
+                        # Update local display
+                        self.active_pig_stats["Age"] = "Adult"
+                        if "raw_data" in self.active_pig_stats:
+                            self.active_pig_stats["raw_data"]["age_days"] = 10
+                    except Exception as e:
+                        print(f"Grow failed: {e}")
+                return None
         
-        # 2. Handle Rename Click
         if event.type == pygame.MOUSEBUTTONDOWN:
             if not self.is_renaming and self.rename_rect.collidepoint(event.pos):
                 self.is_renaming = True
-                # Pre-fill with current name
-                self.current_input = self.active_pig_data.get("Name", "")
+                self.current_input = self.active_pig_stats.get("Name", "")
                 return None
 
-        # 3. Handle Typing
         if self.is_renaming and event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RETURN:
-                # Save Name
+                # SAVE RENAME
                 new_name = self.current_input.strip()
-                if new_name and self.active_pig_data:
-                    # Update the actual pig object referenced in the dict
-                    # (This requires the pig object to be passed in the dict)
-                    if "object" in self.active_pig_data:
-                         self.active_pig_data["object"].name = new_name
-                         self.active_pig_data["Name"] = new_name # Update display immediately
+                pet_id = self.active_pig_stats.get("pet_id")
+                
+                if new_name and pet_id:
+                    print(f"Renaming pet {pet_id} to {new_name}...")
+                    try:
+                        api.update_pet(pet_id, name=new_name)
+                        self.active_pig_stats["Name"] = new_name
+                        if "raw_data" in self.active_pig_stats:
+                            self.active_pig_stats["raw_data"]["name"] = new_name
+                    except Exception as e:
+                        print(f"Rename failed: {e}")
                 
                 self.is_renaming = False
                 
@@ -121,7 +129,6 @@ class DetailsPopup:
             elif event.key == pygame.K_ESCAPE:
                 self.is_renaming = False
             else:
-                # Limit length
                 if len(self.current_input) < 12:
                     self.current_input += event.unicode
 
