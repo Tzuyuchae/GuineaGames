@@ -211,28 +211,27 @@ class APIClient:
 
     # ==================== PET ENDPOINTS ====================
 
-    def create_pet(self, user_id: int, name: str, color: str) -> Dict[str, Any]:
+    def create_pet(self, owner_id: int, name: str, species: str, color: str) -> Dict[str, Any]:
         """
         Create a new pet for a user.
 
         Args:
-            user_id: ID of the pet owner
+            owner_id: ID of the pet owner (User.id)
             name: Pet's name
+            species: Pet's species (e.g., "guinea_pig")
             color: Pet's color
 
         Returns:
-            Dictionary containing pet data with pet_id
-
-        Example:
-            pet = api.create_pet(1, "Fluffy", "brown")
-            print(pet['pet_id'])
+            Dictionary containing pet data (includes 'id' and 'owner_id')
         """
         data = {
-            "user_id": user_id,
+            "owner_id": owner_id,
             "name": name,
+            "species": species,
             "color": color
         }
         return self._post("/pets/", json=data)
+
 
     def get_pets(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
         """
