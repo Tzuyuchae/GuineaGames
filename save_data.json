@@ -1,0 +1,162 @@
+{
+  "coins": 1427,
+  "food": 146,
+  "items": {
+    "Banana": 146
+  },
+  "pigs": [
+    {
+      "name": "Starter Alpha",
+      "score": 1145,
+      "backend_id": null,
+      "color": "Brown",
+      "genes": {
+        "coat_color": [
+          "b",
+          "B"
+        ],
+        "coat_length": [
+          "s",
+          "S"
+        ],
+        "pattern": [
+          "p",
+          "P"
+        ],
+        "eye_color": [
+          "e",
+          "E"
+        ],
+        "fur_type": [
+          "r",
+          "R"
+        ]
+      },
+      "birth_game_minutes": 0
+    },
+    {
+      "name": "Starter Beta",
+      "score": 1116,
+      "backend_id": null,
+      "color": "Brown",
+      "genes": {
+        "coat_color": [
+          "B",
+          "B"
+        ],
+        "coat_length": [
+          "S",
+          "S"
+        ],
+        "pattern": [
+          "p",
+          "P"
+        ],
+        "eye_color": [
+          "e",
+          "E"
+        ],
+        "fur_type": [
+          "r",
+          "r"
+        ]
+      },
+      "birth_game_minutes": 0
+    },
+    {
+      "name": "Cocoa Farty",
+      "score": 1229,
+      "backend_id": null,
+      "color": "Black",
+      "genes": {
+        "coat_color": [
+          "b",
+          "b"
+        ],
+        "coat_length": [
+          "s",
+          "s"
+        ],
+        "pattern": [
+          "p",
+          "p"
+        ],
+        "eye_color": [
+          "E",
+          "E"
+        ],
+        "fur_type": [
+          "R",
+          "R"
+        ]
+      },
+      "birth_game_minutes": 0
+    },
+    {
+      "name": "poopums",
+      "score": 633,
+      "backend_id": null,
+      "color": "Brown",
+      "genes": {
+        "coat_color": [
+          "b",
+          "B"
+        ],
+        "coat_length": [
+          "s",
+          "S"
+        ],
+        "pattern": [
+          "p",
+          "P"
+        ],
+        "eye_color": [
+          "e",
+          "E"
+        ],
+        "fur_type": [
+          "r",
+          "R"
+        ]
+      },
+      "birth_game_minutes": 0
+    },
+    {
+      "name": "Baby_111",
+      "score": 674,
+      "backend_id": null,
+      "color": "Brown",
+      "genes": {
+        "coat_color": [
+          "b",
+          "B"
+        ],
+        "coat_length": [
+          "s",
+          "S"
+        ],
+        "pattern": [
+          "p",
+          "p"
+        ],
+        "eye_color": [
+          "e",
+          "E"
+        ],
+        "fur_type": [
+          "r",
+          "R"
+        ]
+      },
+      "birth_game_minutes": 0
+    }
+  ],
+  "game_time": {
+    "year": 51,
+    "month": 12,
+    "day": 8,
+    "hour": 317,
+    "minute": 37,
+    "am": true
+  }
+}

@@ -1,6 +1,5 @@
 import pygame
 import os
-import sys
 
 # --- Imports ---
 from minigame.button import Button
@@ -14,12 +13,18 @@ from minigame.fruits import Fruit
 base_path = os.path.dirname(__file__)
 assets_path = os.path.join(base_path, "../../assets/audio/")
 
-class Game: 
-    def __init__(self, selected_guinea_pig=None, player_inventory=None): 
-        pygame.mixer.init() 
+
+class Game:
+    def __init__(self, selected_guinea_pig=None, player_inventory=None):
+        pygame.mixer.init()
         self.running = True
         self.selected_guinea_pig = selected_guinea_pig
         self.player_inventory = player_inventory
+
+        # Track what the player earned this run
+        self.fruits_collected = 0
+        self.coins_earned = 0
+        self.won = False  # Set True if all fruits collected
 
         # Screen Dimensions (Should match main.py)
         self.SCREEN_WIDTH = 672
@@ -27,7 +32,7 @@ class Game:
 
         # 1. Load Styling Assets (Background)
         self.background_img = self._load_background()
-        
+
         # 2. Generate Maze
         generator = MazeGenerator(fruit_chance=0.1, seed=42)
         self.PACMAN_MAZE = generator.generate()
@@ -35,28 +40,35 @@ class Game:
         # 3. Create Components
         self.player = Player(seed=42, guinea_pig_data=selected_guinea_pig)
         self.PACMAN_MAZE = self.player.add_player(self.PACMAN_MAZE)
-        
+
         self.enemy = Enemy(seed=42)
         self.PACMAN_MAZE = self.enemy.add_enemies(self.PACMAN_MAZE)
-        
+
         self.fruit = Fruit(fruit_chance=0.1, seed=42)
         self.PACMAN_MAZE = self.fruit.add_fruits(self.PACMAN_MAZE)
 
         self.maze = Maze(self.PACMAN_MAZE)
-        
+
         # 4. Calculate Centering Offsets
         self.offset_x = (self.SCREEN_WIDTH - self.maze.width) // 2
         self.offset_y = (self.SCREEN_HEIGHT - self.maze.height) // 2
-        
+
         # 5. Setup 'Back' Button (Styled Gold/Red)
         button_w = 200
         button_h = 60
         button_x = (self.SCREEN_WIDTH - button_w) // 2
         button_y = self.SCREEN_HEIGHT - button_h - 30
-        
+
         # Colors: (Normal, Hover, Text) -> Using Red theme for Back button
-        self.button_back = Button(button_x, button_y, button_w, button_h,
-                                  'BACK', (178, 34, 34), (200, 50, 50))
+        self.button_back = Button(
+            button_x,
+            button_y,
+            button_w,
+            button_h,
+            "BACK",
+            (178, 34, 34),
+            (200, 50, 50),
+        )
 
         self.play_music("music.wav")
 
@@ -64,15 +76,18 @@ class Game:
         """Loads and scales the title background."""
         paths_to_check = [
             os.path.join(base_path, "../../images/BG_Title.png"),
-            os.path.join(base_path, "../../Global Assets/Sprites/More Sprites/BG Art/Title/BG_Title.png")
+            os.path.join(
+                base_path,
+                "../../Global Assets/Sprites/More Sprites/BG Art/Title/BG_Title.png",
+            ),
         ]
-        
+
         for p in paths_to_check:
             if os.path.exists(p):
                 try:
                     img = pygame.image.load(p).convert()
                     return pygame.transform.scale(img, (self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
-                except:
+                except Exception:
                     pass
         return None
 
@@ -88,6 +103,7 @@ class Game:
 
         for event in events:
             if self.button_back.check_click(event):
+                # Player manually backed out
                 self.running = False
 
         self.button_back.check_hover(mouse_pos)
@@ -95,22 +111,45 @@ class Game:
         if self.running:
             self.player.handle_input(self.maze)
             self.enemy.move_towards_player(self.player.player_pos(), self.maze)
-            
+
             self.check_lose()
             self.check_win()
             self.check_exit()
 
+            # Fruit collection
             self.PACMAN_MAZE, collected_amount = self.fruit.if_collected(
                 (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
             )
-            
-            if collected_amount > 0 and self.player_inventory:
-                self.player_inventory.add_food('Banana', collected_amount)
-                print(f"Collected fruit! Total Food: {self.player_inventory.food}")
+
+            if collected_amount > 0:
+                # Track fruit collected this run
+                self.fruits_collected += collected_amount
+
+                if self.player_inventory:
+                    # 🔹 LOCAL inventory update only (no backend call here)
+                    # This mirrors PlayerInventory.add_food's local behavior
+                    self.player_inventory.items["Banana"] = (
+                        self.player_inventory.items.get("Banana", 0) + collected_amount
+                    )
+                    self.player_inventory.food += collected_amount
+
+                    # 🔹 Coins: 10 coins per fruit (purely local; backend coin sync is elsewhere)
+                    coins_this_tick = collected_amount * 10
+                    self.coins_earned += coins_this_tick
+                    self.player_inventory.add_coins(coins_this_tick)
+
+                    print(
+                        f"Collected {collected_amount} fruit(s)! "
+                        f"Run totals -> Fruit: {self.fruits_collected}, Coins: {self.coins_earned}"
+                    )
 
     def check_exit(self):
-        if (self.player.pos_x == 0 or self.player.pos_x == self.maze.cols - 1 or
-            self.player.pos_y == 0 or self.player.pos_y == self.maze.rows - 1):
+        if (
+            self.player.pos_x == 0
+            or self.player.pos_x == self.maze.cols - 1
+            or self.player.pos_y == 0
+            or self.player.pos_y == self.maze.rows - 1
+        ):
             print("Exited the maze!")
             self.running = False
 
@@ -119,21 +158,21 @@ class Game:
         if self.background_img:
             screen.blit(self.background_img, (0, 0))
         else:
-            screen.fill((40, 40, 60)) # Fallback color
+            screen.fill((40, 40, 60))  # Fallback color
 
         # 2. Draw Translucent Backdrop for Maze (Makes it pop)
         backdrop_rect = pygame.Rect(
-            self.offset_x - 10, 
-            self.offset_y - 10, 
-            self.maze.width + 20, 
-            self.maze.height + 20
+            self.offset_x - 10,
+            self.offset_y - 10,
+            self.maze.width + 20,
+            self.maze.height + 20,
         )
         # Create a surface for transparency
         s = pygame.Surface((backdrop_rect.width, backdrop_rect.height))
-        s.set_alpha(180) # Semi-transparent black
+        s.set_alpha(180)  # Semi-transparent black
         s.fill((0, 0, 0))
         screen.blit(s, (backdrop_rect.x, backdrop_rect.y))
-        
+
         # Draw Border around maze
         pygame.draw.rect(screen, GOLD, backdrop_rect, 3, border_radius=5)
 
@@ -142,7 +181,7 @@ class Game:
         self.fruit.draw(screen, self.PACMAN_MAZE, self.offset_x, self.offset_y)
         self.player.draw(screen, self.offset_x, self.offset_y)
         self.enemy.draw(screen, self.offset_x, self.offset_y)
-        
+
         # 4. Draw UI Elements
         self.button_back.draw(screen)
 
@@ -157,19 +196,25 @@ class Game:
     def check_win(self):
         if self.fruit.all_fruits_collected(self.PACMAN_MAZE):
             print("You Win!")
+            self.won = True
             self.running = False
 
     def _draw_guinea_pig_hud(self, screen):
         try:
-            hud_font = pygame.font.SysFont('Arial', 20, bold=True)
-        except:
+            hud_font = pygame.font.SysFont("Arial", 20, bold=True)
+        except Exception:
             hud_font = pygame.font.Font(None, 24)
 
-        name = self.selected_guinea_pig.get('name', 'Unknown')
-        text = hud_font.render(f"Playing as: {name}", True, GOLD) 
+        # Handle dict OR object for the selected pig
+        if isinstance(self.selected_guinea_pig, dict):
+            name = self.selected_guinea_pig.get("name", "Unknown")
+        else:
+            name = getattr(self.selected_guinea_pig, "name", "Unknown")
+
+        text = hud_font.render(f"Playing as: {name}", True, GOLD)
         text_rect = text.get_rect()
         text_rect.centerx = self.SCREEN_WIDTH // 2
-        text_rect.top = self.offset_y - 40 # Float above maze
+        text_rect.top = self.offset_y - 40  # Float above maze
 
         # Draw styled box behind text
         bg_rect = text_rect.inflate(20, 10)
