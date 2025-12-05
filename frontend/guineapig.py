@@ -1,59 +1,108 @@
 import pygame
 import os
+import random
+
+# Safe path handling
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class GuineaPigSprite:
     """
-    Visual wrapper for API pet data.
-    Displays pigs walking on the homescreen with correct color sprites.
+    Visual wrapper for API Pet Data.
+    Combines the visual logic of the uploaded file with the data structure of the API.
     """
     def __init__(self, x, y, data_dict):
-        # Ensure we store the data dictionary
+        """
+        x, y: Position on screen
+        data_dict: The dictionary returned from the API (e.g. {'name': 'Bob', 'color': 'Brown', ...})
+        """
         self.data = data_dict
         
-        self.rect = pygame.Rect(x, y - 60, 60, 60) # Default size
+        # --- DETERMINE COAT LENGTH ---
+        # 1. Try to get explicit length from data
+        c_len = self.data.get('coat_length', None)
         
-        # Load the correct image based on color
-        self.image = self._load_smart_sprite()
-        
-        # Update rect to match image size
+        # 2. If missing/null, infer from Species/Breed
+        if not c_len or c_len == 'None':
+            species = self.data.get('species', 'Guinea Pig')
+            # List of breeds that are known to be Long Haired
+            long_hair_breeds = ["Abyssinian", "Peruvian", "Silkie", "Sheba", "Coronet", "Alpaca", "Lunkarya"]
+            
+            if species in long_hair_breeds:
+                c_len = "Long"
+            else:
+                c_len = "Short"
+
+        # Determine Phenotype for sprite loading
+        self.phenotype = {
+            'coat_color': self.data.get('color_phenotype', self.data.get('color', 'White')),
+            'coat_length': c_len
+        }
+
+        # Load the correct sprite
+        self.image = self._load_sprite_by_phenotype()
+
         self.rect = self.image.get_rect()
         self.rect.bottomleft = (x, y)
 
-    def _load_smart_sprite(self):
-        """Loads correct sprite file based on pet color"""
-        base_path = os.path.dirname(os.path.abspath(__file__))
-        
-        # Path to your sprite folder
-        sprite_folder = os.path.join(base_path, "Global Assets", "Sprites", "Guinea Pigs", "SH_GP_Sprites", "SH_GP_Sprites")
-        
-        # Determine filename based on phenotype/color
-        color = self.data.get('color_phenotype', self.data.get('color', 'White')).lower()
-        filename = "SH_GP_White_01.png" # Default
-        
-        if "brown" in color:
-            filename = "SH_GP_Brown_01.png"
-        elif "orange" in color:
-            filename = "SH_GP_Orange_01.png"
-            
-        full_path = os.path.join(sprite_folder, filename)
-        
+    def _load_sprite_by_phenotype(self):
+        """Load sprite based on guinea pig's phenotype string from API"""
         try:
-            if os.path.exists(full_path):
-                img = pygame.image.load(full_path).convert_alpha()
-                return pygame.transform.scale(img, (80, 80))
-        except Exception as e:
-            print(f"Sprite Load Error: {e}")
+            coat_length = self.phenotype.get('coat_length', 'Short')
+            # Clean up color string (e.g., "Brown" or "White")
+            raw_color = self.phenotype.get('coat_color', 'White')
             
-        # Fallback 1: Generic image
-        try:
-            generic_path = os.path.join(base_path, "images", "guineapig.png")
-            if os.path.exists(generic_path):
-                return pygame.transform.scale(pygame.image.load(generic_path).convert_alpha(), (80, 80))
-        except:
-            pass
+            # Simple mapping to handle complex API strings if necessary
+            coat_color = 'White'
+            if 'Brown' in raw_color: coat_color = 'Brown'
+            elif 'Orange' in raw_color: coat_color = 'Orange'
+            elif 'Black' in raw_color: coat_color = 'Brown' # Fallback for black if no specific sprite
+            
+            # Determine sprite prefix (SH = Short Hair, LH = Long Hair)
+            prefix = 'SH' if 'Short' in coat_length else 'LH'
 
-        # Fallback 2: Brown Square
+            # Pick a random variant (01-09) to make them look alive, 
+            # or hash the ID so the same pig always has the same variant
+            if 'id' in self.data:
+                # distinct variant based on ID
+                variant = (hash(str(self.data['id'])) % 9) + 1
+            else:
+                variant = random.randint(1, 9)
+            
+            variant_str = f"{variant:02d}"
+
+            # Build path to sprite
+            # Folder Structure: Global Assets/Sprites/Guinea Pigs/SH_GP_Sprites/SH_GP_Sprites/filename
+            # We check a few variations to be safe against folder structure changes
+            
+            folder_name = f"{prefix}_GP_Sprites"
+            filename = f"{prefix}_GP_{coat_color}_{variant_str}.png"
+            
+            # Construct possible paths
+            paths_to_check = [
+                os.path.join(SCRIPT_DIR, "Global Assets", "Sprites", "Guinea Pigs", folder_name, folder_name, filename),
+                os.path.join(SCRIPT_DIR, "Global Assets", "Sprites", "Guinea Pigs", folder_name, filename),
+                os.path.join(SCRIPT_DIR, "../Global Assets/Sprites/Guinea Pigs", folder_name, folder_name, filename)
+            ]
+
+            for p in paths_to_check:
+                if os.path.exists(p):
+                    img = pygame.image.load(p).convert_alpha()
+                    return pygame.transform.scale(img, (80, 80)) # Scaled for UI
+            
+            # If specific variant missing, try 01
+            fallback_name = f"{prefix}_GP_{coat_color}_01.png"
+            fallback_path = os.path.join(SCRIPT_DIR, "Global Assets", "Sprites", "Guinea Pigs", folder_name, folder_name, fallback_name)
+            
+            if os.path.exists(fallback_path):
+                img = pygame.image.load(fallback_path).convert_alpha()
+                return pygame.transform.scale(img, (80, 80))
+
+        except Exception as e:
+            print(f"Error loading sprite: {e}")
+
+        # Final fallback: colored square
         s = pygame.Surface((80, 80))
+        # Default color brown-ish
         s.fill((150, 75, 0))
         return s
 
@@ -64,18 +113,22 @@ class GuineaPigSprite:
         return self.rect.collidepoint(pos)
 
     def get_stats(self):
-        """
-        Extracts stats for the popup window.
-        NOW SUPPORTS DICTIONARIES CORRECTLY.
-        """
-        # --- FIX: Use .get() for dictionary access instead of getattr() ---
+        """Extracts stats from the API Dict for the popup."""
+        name = self.data.get('name', 'Unknown')
+        speed = self.data.get('speed', 0)
+        endurance = self.data.get('endurance', 0)
+        hunger = self.data.get('hunger', 0)
+        age_val = "Adult" if self.data.get('age_days', 0) >= 1 else "Baby"
+        breed_val = self.data.get('species', 'Guinea Pig')
+
         return {
-            "Name": self.data.get('name', 'Unknown'),
-            "Speed": self.data.get('speed', 0),
-            "Endurance": self.data.get('endurance', 0),
-            "Hunger": f"{self.data.get('hunger', 0)}/3",
-            "Age": "Adult" if self.data.get('age_days', 0) > 0 else "Baby",
+            "Name": name,
+            "Breed": breed_val, # Add breed to stats
+            "Speed": speed,
+            "Endurance": endurance,
+            "Hunger": f"{hunger}/3",
+            "Age": age_val,
             "image_surface": self.image,
-            "pet_id": self.data.get('id'),
-            "raw_data": self.data  # Critical for renaming to work!
+            "pet_id": self.data.get('id'), # Crucial for API calls
+            "raw_data": self.data
         }

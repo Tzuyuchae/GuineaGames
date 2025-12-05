@@ -63,6 +63,7 @@ class GuineaPigSelector:
     def _load_background(self):
         """Loads and scales the title background."""
         base_path = os.path.dirname(os.path.abspath(__file__))
+        # Try various relative paths to find the asset
         paths_to_check = [
             os.path.join(base_path, "../../Global Assets/Sprites/More Sprites/BG Art/Title/BG_Title.png"),
             os.path.join(base_path, "../../images/BG_Title.png"),
@@ -93,40 +94,77 @@ class GuineaPigSelector:
                     return pygame.transform.scale(img, (60, 60))
                 except: pass
         
+        # Fallback square
         s = pygame.Surface((60, 60))
         s.fill((150, 75, 0))
         return s
 
     def _get_pet_sprite(self, pig_data):
-        """Finds and loads the specific sprite based on color."""
+        """Finds and loads the specific sprite based on color using robust path finding."""
+        
         # 1. Determine Color
         color = "white"
+        pig_id = 0
+        
         if isinstance(pig_data, dict):
             # API Dictionary
             color = pig_data.get('color_phenotype', pig_data.get('color', 'White')).lower()
+            pig_id = pig_data.get('id', 0)
         else:
             # Legacy Object
             if hasattr(pig_data, 'phenotype') and isinstance(pig_data.phenotype, dict):
                 color = pig_data.phenotype.get('coat_color', 'white').lower()
             elif hasattr(pig_data, 'color'):
                 color = str(pig_data.color).lower()
+            pig_id = getattr(pig_data, 'id', 0)
 
-        # 2. Pick Filename
-        filename = "SH_GP_White_01.png" # Default
-        if "brown" in color: filename = "SH_GP_Brown_01.png"
-        elif "orange" in color: filename = "SH_GP_Orange_01.png"
+        # 2. Map color to filename keywords
+        sprite_color = "White" # Default
+        if "brown" in color: sprite_color = "Brown"
+        elif "orange" in color: sprite_color = "Orange"
+        elif "black" in color: sprite_color = "Brown" # Fallback for black
+        elif "mixed" in color: sprite_color = "Orange" # Fallback for mixed
         
-        # 3. Build Path
-        # Base = frontend/minigame -> go up to frontend -> Global Assets
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        path = os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", "SH_GP_Sprites", "SH_GP_Sprites", filename)
-        
-        # 4. Load
+        # 3. Pick a variant (01-09) consistently based on ID
+        # This makes the same pig always have the same look
         try:
-            if os.path.exists(path):
-                img = pygame.image.load(path).convert_alpha()
+            # Convert ID string to int hash if needed
+            if isinstance(pig_id, str):
+                numeric_id = sum(ord(c) for c in pig_id)
+            else:
+                numeric_id = int(pig_id)
+            
+            variant_num = (numeric_id % 9) + 1
+        except:
+            variant_num = 1
+            
+        variant_str = f"{variant_num:02d}"
+        
+        filename = f"SH_GP_{sprite_color}_{variant_str}.png"
+        
+        # 4. Build Path - Look in Global Assets
+        # Current file is in frontend/minigame/
+        # We need to go up to frontend, then to Global Assets
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        sprite_folder_path = os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", "SH_GP_Sprites", "SH_GP_Sprites")
+        full_path = os.path.join(sprite_folder_path, filename)
+        
+        # 5. Load
+        try:
+            if os.path.exists(full_path):
+                img = pygame.image.load(full_path).convert_alpha()
                 return pygame.transform.scale(img, (60, 60))
-        except: pass
+            else:
+                # Try fallback to variant 01 if specific variant missing
+                fallback_name = f"SH_GP_{sprite_color}_01.png"
+                fallback_path = os.path.join(sprite_folder_path, fallback_name)
+                if os.path.exists(fallback_path):
+                    img = pygame.image.load(fallback_path).convert_alpha()
+                    return pygame.transform.scale(img, (60, 60))
+                    
+        except Exception as e:
+            print(f"Selector Sprite Error: {e}")
         
         return self.default_sprite
 
@@ -172,11 +210,18 @@ class GuineaPigSelector:
             self.selected_pet = self.pets[0]
 
     def _get_mock_pets(self):
-        return [
-            {'id': 1, 'name': 'Fluffy (Mock)', 'color': 'brown', 'speed': 55, 'sprite': self.default_sprite},
-            {'id': 2, 'name': 'Squeaky (Mock)', 'color': 'white', 'speed': 70, 'sprite': self.default_sprite},
-            {'id': 3, 'name': 'Nibbles (Mock)', 'color': 'orange', 'speed': 45, 'sprite': self.default_sprite}
+        # Create mock data but use the sprite loader to get real images if available
+        mock_pigs = [
+            {'id': 1, 'name': 'Fluffy (Mock)', 'color': 'brown', 'speed': 55},
+            {'id': 2, 'name': 'Squeaky (Mock)', 'color': 'white', 'speed': 70},
+            {'id': 3, 'name': 'Nibbles (Mock)', 'color': 'orange', 'speed': 45}
         ]
+        
+        # Enhance mock pigs with sprites
+        for p in mock_pigs:
+            p['sprite'] = self._get_pet_sprite(p)
+            
+        return mock_pigs
 
     def _create_pet_buttons(self):
         self.pet_buttons = []

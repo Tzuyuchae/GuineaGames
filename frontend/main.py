@@ -1,9 +1,16 @@
 import pygame
 import sys
 import ctypes
+import os
 
 # --- API IMPORT ---
-from api_client import api
+try:
+    from api_client import api
+except ImportError:
+    print("API Client not found. Running in offline mode (if supported).")
+    class MockApi:
+        def check_connection(self): return False
+    api = MockApi()
 
 # --- FIX WINDOWS SCALING ---
 try:
@@ -22,6 +29,7 @@ clock = pygame.time.Clock()
 FPS = 60
 
 # --- IMPORT PAGES ---
+# Ensure these files exist in the same directory
 import homescreen
 import title
 import store_page
@@ -29,8 +37,7 @@ import breeding
 from settings_popup import SettingsPopup
 import help_page
 
-# --- IMPORT MINIGAME (Restored) ---
-# Ensure this folder exists and has __init__.py if needed
+# --- IMPORT MINIGAME ---
 try:
     from minigame.minigame_page import MinigamePage
 except ImportError as e:
@@ -41,17 +48,33 @@ except ImportError as e:
 CURRENT_USER_ID = 1
 print("Connecting to backend...")
 
-if api.check_connection():
+if hasattr(api, 'check_connection') and api.check_connection():
     print("Backend connected!")
     try:
         user = api.get_user(1)
         CURRENT_USER_ID = user['id']
         print(f"Logged in as {user['username']}")
+
+        # --- TEST: ADD STARTER COINS ---
+        # If balance is low, top it up for testing!
+        current_balance = user.get('balance', 0)
+        if current_balance < 5000:
+            print(f"Balance low ({current_balance}). Adding 5000 test coins...")
+            try:
+                api.create_transaction(CURRENT_USER_ID, "gift", 5000, "Starter Test Coins")
+            except Exception as e:
+                print(f"Could not add coins: {e}")
+
     except:
         print("Creating User 1...")
         try:
             user = api.create_user("Player1", "p1@game.com", "password")
             CURRENT_USER_ID = user['id']
+            
+            # --- TEST: ADD STARTER COINS FOR NEW USER ---
+            print("Adding 5000 test coins to new user...")
+            api.create_transaction(CURRENT_USER_ID, "gift", 5000, "Starter Test Coins")
+
             # Adult Starters
             p1 = api.create_pet(CURRENT_USER_ID, "Starter Alpha", "Abyssinian", "Brown")
             api.update_pet(p1['id'], age_days=10)
@@ -64,7 +87,13 @@ else:
 
 # --- PAGE INITIALIZATION ---
 homescreen.homescreen_init(screen_width, screen_height)
-store_page.store_init("frontend/Global Assets/Sprites/More Sprites/BG Art/Store/BG_Store.png")
+
+# Ensure the store background path is correct relative to your project structure
+store_bg_path = "frontend/Global Assets/Sprites/More Sprites/BG Art/Store/BG_Store.png"
+if not os.path.exists(store_bg_path):
+    # Fallback to a simpler path if the long one doesn't exist
+    store_bg_path = "images/BG_Store.png"
+store_page.store_init(store_bg_path)
 
 settings_popup = SettingsPopup(screen_width, screen_height)
 settings_active = False 
@@ -89,14 +118,21 @@ while running:
             
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
+                # Toggle settings on Escape key, unless we are on title screen
                 if currentmenu != 'title':
                     settings_active = not settings_active
                     settings_popup.active = settings_active
                     if not settings_active:
                         settings_popup.active = False
 
+        # Handle events inside the Settings Popup if it is open
         if settings_active:
             action = settings_popup.handle_event(event)
+            
+            # Sync main loop state if popup closed itself
+            if not settings_popup.active:
+                settings_active = False
+
             if action == 'quit_game':
                 running = False
             elif action == 'help':
@@ -104,25 +140,47 @@ while running:
                 currentmenu = 'help'
                 settings_active = False
                 settings_popup.active = False
+            elif action == 'close': 
+                settings_active = False
+                settings_popup.active = False
 
     # --- UPDATES & DRAWING ---
     
     if currentmenu == 'title':
+        # Only check buttons if the settings popup isn't blocking them
         if not settings_active:
             new_state = title.title_update(events)
-            if new_state:
+            
+            # --- THE FIX: Handle specific return values ---
+            if new_state == 'settings':
+                # Open the popup, but stay on 'title' screen so background persists
+                settings_active = True
+                settings_popup.active = True
+            
+            elif new_state == 'quit':
+                running = False
+                
+            elif new_state:
+                # This handles 'homescreen' or other page transitions
                 currentmenu = new_state
+                
         title.title_draw(screen)
 
     elif currentmenu == 'homescreen':
         if not settings_active:
             new_state = homescreen.homescreen_update(events, CURRENT_USER_ID)
             if new_state:
-                # FIX: Handle the 'mini_games' string from homescreen
                 if new_state == 'mini_games':
                     currentmenu = 'minigame'
+                
+                # If user clicks the "home" building, open settings
+                elif new_state == 'home':
+                    settings_active = True
+                    settings_popup.active = True
+                
                 else:
                     currentmenu = new_state
+        
         homescreen.homescreen_draw(screen, CURRENT_USER_ID)
 
     elif currentmenu == 'store':
@@ -137,9 +195,11 @@ while running:
             new_state = breeding.breeding_update(events, None, None) 
             if new_state == 'homescreen':
                 currentmenu = 'homescreen'
-        breeding.breeding_draw(screen, None, None)
+        
+        # --- FIXED: Pass homescreen.game_time so the clock works! ---
+        breeding.breeding_draw(screen, None, homescreen.game_time)
 
-    # --- MINIGAME HANDLER (This was missing!) ---
+    # --- MINIGAME HANDLER ---
     elif currentmenu == 'minigame':
         if not settings_active and minigame_manager:
             # Update
@@ -175,7 +235,9 @@ while running:
             settings_active = True
             settings_popup.active = True
 
-    if settings_active and currentmenu != 'title' and currentmenu != 'help':
+    # --- DRAW SETTINGS POPUP ---
+    # This draws the popup on TOP of whatever menu is currently active
+    if settings_active and currentmenu != 'help':
         settings_popup.draw(screen)
 
     pygame.display.flip()

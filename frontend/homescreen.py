@@ -20,6 +20,7 @@ sidebar_font = None
 background = None
 BG_POS = (0, 0)
 house_data = {}
+static_obstacles = [] # New list for trees, fences, etc.
 
 # --- Logic Globals ---
 game_time = {
@@ -56,7 +57,7 @@ def make_glow(mask, intensity=22):
     return glow
 
 def homescreen_init(screen_w, screen_h):
-    global font, sidebar_font, background, BG_POS, house_data, popup_manager
+    global font, sidebar_font, background, BG_POS, house_data, popup_manager, static_obstacles
 
     pygame.font.init()
     font = pygame.font.Font(None, 40)
@@ -83,6 +84,7 @@ def homescreen_init(screen_w, screen_h):
     background = pygame.transform.scale(raw_bg, (new_w, new_h))
     BG_POS = ((screen_w - new_w) // 2, 0)
 
+    # --- DEFINING BUILDINGS ---
     houses_original = {
         "home":       (132, 83, 215, 232),
         "mini_games": (348, 331, 202, 215),
@@ -105,12 +107,29 @@ def homescreen_init(screen_w, screen_h):
         rect = pygame.Rect(sx, sy, sw, sh)
         house_data[name] = {"rect": rect, "img": house_img, "mask": mask, "glow": glow}
 
+    # --- DEFINING EXTRA OBSTACLES (Trees, Fences) ---
+    # These are approximations based on the background image 800x600 reference
+    obstacles_original = [
+        (30, 480, 120, 100),   # The Big Tree on the left
+        (220, 580, 100, 40),   # Fence bottom left
+        (120, 650, 150, 40),   # Fence bottom center
+    ]
+    
+    static_obstacles = []
+    for (ox, oy, ow, oh) in obstacles_original:
+        sx = int(ox * scale) + BG_POS[0]
+        sy = int(oy * scale) + BG_POS[1]
+        sw = int(ow * scale)
+        sh = int(oh * scale)
+        static_obstacles.append(pygame.Rect(sx, sy, sw, sh))
+
+
 def refresh_visual_pigs(user_id):
     """
-    Fetch pets from API and update sprites.
-    Now calculates boundaries based on actual screen size to prevent cutoff.
+    Fetch pets and update sprites.
+    Strictly ensures pigs do not overlap buildings, trees, or each other.
     """
-    global visual_pigs, house_data
+    global visual_pigs, house_data, static_obstacles
     
     try:
         my_pets = api.get_user_pets(user_id)
@@ -120,47 +139,112 @@ def refresh_visual_pigs(user_id):
     existing_sprites = {s.data['id']: s for s in visual_pigs}
     new_visual_pigs = []
     
-    # Get actual screen dimensions
     screen = pygame.display.get_surface()
     sw, sh = screen.get_size()
 
-    # Define Safe Zone (Padding of 20px so they aren't on the absolute edge)
+    # Define the yard area
     pad = 20
-    # Assuming bottom half of screen for yard
     yard_min_x, yard_max_x = pad, sw - 60 - pad 
     yard_min_y, yard_max_y = 300, sh - 60 - pad
     
     for pet_data in my_pets:
         pid = pet_data['id']
-        
+        sprite = None
+        needs_new_spot = True
+
+        # 1. Check if we already have this pig
         if pid in existing_sprites:
             sprite = existing_sprites[pid]
-            sprite.data = pet_data 
-            new_visual_pigs.append(sprite)
-        else:
-            valid_spot = False
-            attempts = 0
+            sprite.data = pet_data # Update stats
             
-            # Default safe spot (middle of yard)
-            rx, ry = sw // 2, yard_min_y + 50
+            # CRITICAL FIX: Check if the EXISTING pig is currently in a bad spot.
+            # If they are overlapping something, we force them to move.
+            is_safe = True
+            
+            # Check overlap with buildings
+            for house_info in house_data.values():
+                if sprite.rect.colliderect(house_info["rect"].inflate(-10, -10)):
+                    is_safe = False
+                    break
+            
+            # Check overlap with static obstacles (trees)
+            if is_safe:
+                for obs in static_obstacles:
+                    if sprite.rect.colliderect(obs):
+                        is_safe = False
+                        break
 
-            while not valid_spot and attempts < 20:
+            # Check overlap with pigs processed SO FAR in this loop
+            if is_safe:
+                for other_pig in new_visual_pigs:
+                    if sprite.rect.colliderect(other_pig.rect):
+                        is_safe = False
+                        break
+            
+            if is_safe:
+                needs_new_spot = False # It's safe, leave it alone
+                new_visual_pigs.append(sprite)
+
+        # 2. If it's a new pig OR the old pig was in a bad spot, find a new spot
+        if needs_new_spot:
+            final_pos = None
+            
+            # Create a new sprite instance if needed, or reuse old one to keep image cache
+            if sprite is None:
+                # Temp sprite just to get rect size? We'll assume 60x60 for calculation
+                pass
+
+            # Attempt 100 times to find a clear spot
+            for _ in range(100): 
                 rx = random.randint(yard_min_x, yard_max_x)
                 ry = random.randint(yard_min_y, yard_max_y)
-                potential_rect = pygame.Rect(rx, ry - 60, 60, 60)
+                
+                # Assume Pig is roughly 60x50
+                potential_rect = pygame.Rect(rx, ry, 60, 50)
                 
                 collision = False
+                
+                # Check Buildings (Inflate check to keep distance)
                 for house_info in house_data.values():
-                    if potential_rect.colliderect(house_info["rect"].inflate(10, 10)):
+                    if potential_rect.colliderect(house_info["rect"]):
                         collision = True
                         break
                 
+                # Check Trees/Fences
                 if not collision:
-                    valid_spot = True
-                attempts += 1
+                    for obs in static_obstacles:
+                        if potential_rect.colliderect(obs):
+                            collision = True
+                            break
+
+                # Check Other Pigs
+                if not collision:
+                    for existing_pig in new_visual_pigs:
+                        # Inflate strictly to give them "personal space"
+                        if potential_rect.colliderect(existing_pig.rect.inflate(10, 10)):
+                            collision = True
+                            break
                 
-            sprite = GuineaPigSprite(rx, ry, pet_data)
-            new_visual_pigs.append(sprite)
+                if not collision:
+                    final_pos = (rx, ry)
+                    break 
+            
+            # Fallback if map is too full
+            if final_pos is None:
+                safe_x = pad + (len(new_visual_pigs) * 65) % (sw - 100)
+                safe_y = sh - 70 
+                final_pos = (safe_x, safe_y)
+
+            # Create or Move Sprite
+            if sprite:
+                sprite.rect.topleft = final_pos # Move existing
+                # Ensure we update the internal x,y if the sprite uses them
+                if hasattr(sprite, 'x'): sprite.x = final_pos[0]
+                if hasattr(sprite, 'y'): sprite.y = final_pos[1]
+                new_visual_pigs.append(sprite)
+            else:
+                new_sprite = GuineaPigSprite(final_pos[0], final_pos[1], pet_data)
+                new_visual_pigs.append(new_sprite)
 
     visual_pigs = new_visual_pigs
 
@@ -217,17 +301,13 @@ def homescreen_update(events, user_id):
                 if rect.collidepoint(mouse_pos):
                     return name
     
-    # --- NEW: KEEP PIGS ON SCREEN ---
-    # This prevents them from wandering off the edges
+    # --- KEEP PIGS ON SCREEN ---
     screen = pygame.display.get_surface()
     screen_rect = screen.get_rect()
     
     for sprite in visual_pigs:
-        # If the sprite has an update method, call it here to move the pig
         if hasattr(sprite, 'update'):
             sprite.update()
-
-        # Clamp ensures the rect stays strictly inside the screen
         sprite.rect.clamp_ip(screen_rect)
 
     return None
@@ -268,18 +348,14 @@ def homescreen_draw(screen, user_id):
             gy = rect.y - (glow.get_height() - rect.height) // 2
             screen.blit(glow, (gx, gy))
 
-            # --- DRAW LABELS (This part was missing!) ---
-            # 1. Format the name (e.g. "mini_games" -> "Mini Games")
+            # --- DRAW LABELS ---
             display_name = name.replace("_", " ").title()
             
-            # 2. Render the text (White with Black shadow)
             text_surf = font.render(display_name, True, (255, 255, 255))
             shadow_surf = font.render(display_name, True, (0, 0, 0))
             
-            # 3. Calculate center position
             text_rect = text_surf.get_rect(center=rect.center)
             
-            # 4. Draw Shadow first, then Text
             screen.blit(shadow_surf, (text_rect.x + 2, text_rect.y + 2))
             screen.blit(text_surf, text_rect)
 

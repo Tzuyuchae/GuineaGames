@@ -31,15 +31,19 @@ class MinigamePage:
         )
 
     def initialize_review_screen(self):
-        # This is now the number of fruits collected
-        # Note: If your Game class calls it something else (like score), change 'collected_amount'
+        # Get fruit count from game instance
         fruit_count = getattr(self.game_instance, 'collected_amount', 0)
         
-        # --- SEND FOOD REWARD TO API ---
+        # --- CALCULATE REWARDS ---
+        # 1. Coin Reward (10% of fruit collected)
+        coin_amount = int(fruit_count * 0.1)
+        if coin_amount < 1 and fruit_count > 0:
+            coin_amount = 1 # Minimum 1 coin if you played well enough to get fruit
+
         if api and fruit_count > 0:
-            print(f"Adding {fruit_count} Carrots to inventory...")
+            print(f"Rewards: {fruit_count} Carrots, {coin_amount} Coins")
             try:
-                # Add "Carrot" to inventory
+                # 1. Give Fruit (Carrots)
                 api.add_inventory_item(
                     self.user_id, 
                     item_name="Carrot", 
@@ -47,14 +51,22 @@ class MinigamePage:
                     quantity=fruit_count
                 )
                 
-                # Optional: Also add points to leaderboard if you want
-                api.update_user_score(self.user_id, fruit_count * 10)
+                # 2. Give Coins
+                if coin_amount > 0:
+                    api.create_transaction(
+                        self.user_id, 
+                        t_type="reward", 
+                        amount=coin_amount, 
+                        desc="Minigame Reward"
+                    )
+                
+                # 3. Update Score (Optional Leaderboard logic)
+                # api.update_user_score(self.user_id, fruit_count * 10)
                 
             except Exception as e:
                 print(f"Reward Error: {e}")
-        # -------------------------------
-
-        # For display purposes on the score screen
+        
+        # Initialize Score Screen
         self.final_score_screen = FinalScoreScreen(fruit_count, 0)
 
     def update(self, events):

@@ -49,15 +49,28 @@ class APIClient:
     def get_user_pets(self, user_id: int):
         return self._get(f"/pets/owner/{user_id}")
 
-    def create_pet(self, owner_id, name, species, color):
-        return self._post("/pets/", json={"owner_id": owner_id, "name": name, "species": species, "color": color})
+    def create_pet(self, owner_id, name, species, color, **kwargs):
+        """
+        Creates a new pet. 
+        Accepts **kwargs to pass extra stats (speed, endurance, etc.) 
+        if the backend supports them.
+        """
+        data = {
+            "owner_id": owner_id, 
+            "name": name, 
+            "species": species, 
+            "color": color
+        }
+        # Add any extra stats (speed, endurance, market_value) to the payload
+        data.update(kwargs)
+        
+        return self._post("/pets/", json=data)
 
     def update_pet(self, pet_id, **kwargs):
-        # Used for renaming
+        # Used for renaming or updating stats
         return self.session.put(f"{self.base_url}/pets/{pet_id}", json=kwargs).json()
 
     def delete_pet(self, pet_id: int):
-        # <--- THIS WAS MISSING
         return self._delete(f"/pets/{pet_id}")
 
     # --- INVENTORY ---

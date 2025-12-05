@@ -19,8 +19,13 @@ class Player:
         raw_speed = 50
         raw_endurance = 50
         if guinea_pig_data:
-            raw_speed = guinea_pig_data.get('speed', 50)
-            raw_endurance = guinea_pig_data.get('endurance', 50)
+            # Handle both Dict (API) and Object (Legacy)
+            if isinstance(guinea_pig_data, dict):
+                raw_speed = guinea_pig_data.get('speed', 50)
+                raw_endurance = guinea_pig_data.get('endurance', 50)
+            else:
+                raw_speed = getattr(guinea_pig_data, 'speed', 50)
+                raw_endurance = getattr(guinea_pig_data, 'endurance', 50)
 
         # Movement Constants (Lower delay = Faster)
         self.BASE_DELAY = 150 - (raw_speed * 0.5)  # Start speed
@@ -37,24 +42,64 @@ class Player:
         self.is_fatigued = False
 
     def _load_sprite(self, pet_data):
-        # Try Loading specific pet color
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        filename = "SH_GP_White_01.png"
+        """Loads specific sprite using robust path finding logic (Matching Store/Selector)"""
+        
+        # 1. Determine Color & ID
+        color = "white"
+        pig_id = 0
         
         if pet_data:
-            color = pet_data.get('color_phenotype', pet_data.get('color', 'White')).lower()
-            if "brown" in color: filename = "SH_GP_Brown_01.png"
-            elif "orange" in color: filename = "SH_GP_Orange_01.png"
-            
-        path = os.path.join(base, "Global Assets", "Sprites", "Guinea Pigs", "SH_GP_Sprites", "SH_GP_Sprites", filename)
-        
+            if isinstance(pet_data, dict):
+                color = pet_data.get('color_phenotype', pet_data.get('color', 'White')).lower()
+                pig_id = pet_data.get('id', 0)
+            else:
+                if hasattr(pet_data, 'phenotype') and isinstance(pet_data.phenotype, dict):
+                    color = pet_data.phenotype.get('coat_color', 'white').lower()
+                elif hasattr(pet_data, 'color'):
+                    color = str(pet_data.color).lower()
+                pig_id = getattr(pet_data, 'id', 0)
+
+        # 2. Map color to filename keywords
+        sprite_color = "White" # Default
+        if "brown" in color: sprite_color = "Brown"
+        elif "orange" in color: sprite_color = "Orange"
+        elif "black" in color: sprite_color = "Brown" # Fallback for black
+        elif "mixed" in color: sprite_color = "Orange" # Fallback for mixed
+
+        # 3. Pick a variant (01-09) consistently based on ID
         try:
-            if os.path.exists(path):
-                img = pygame.image.load(path).convert_alpha()
+            if isinstance(pig_id, str):
+                numeric_id = sum(ord(c) for c in pig_id)
+            else:
+                numeric_id = int(pig_id)
+            variant_num = (numeric_id % 9) + 1
+        except:
+            variant_num = 1
+            
+        variant_str = f"{variant_num:02d}"
+        filename = f"SH_GP_{sprite_color}_{variant_str}.png"
+
+        # 4. Build Path
+        # Base = frontend/minigame -> go up to frontend -> Global Assets
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        sprite_folder = os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", "SH_GP_Sprites", "SH_GP_Sprites")
+        full_path = os.path.join(sprite_folder, filename)
+
+        # 5. Load
+        try:
+            if os.path.exists(full_path):
+                img = pygame.image.load(full_path).convert_alpha()
+                return pygame.transform.scale(img, (TILE_SIZE, TILE_SIZE))
+            
+            # Fallback to variant 01
+            fallback_name = f"SH_GP_{sprite_color}_01.png"
+            fallback_path = os.path.join(sprite_folder, fallback_name)
+            if os.path.exists(fallback_path):
+                img = pygame.image.load(fallback_path).convert_alpha()
                 return pygame.transform.scale(img, (TILE_SIZE, TILE_SIZE))
         except: pass
 
-        # Fallback
+        # Final Fallback
         s = pygame.Surface((TILE_SIZE, TILE_SIZE))
         s.fill(self.color)
         return s
@@ -160,5 +205,3 @@ class Player:
             screen.blit(tint, self.rect)
         else:
             screen.blit(self.image, self.rect)
-
-            
