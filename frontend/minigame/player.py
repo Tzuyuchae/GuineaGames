@@ -160,3 +160,5 @@ class Player:
             screen.blit(tint, self.rect)
         else:
             screen.blit(self.image, self.rect)
+
+            

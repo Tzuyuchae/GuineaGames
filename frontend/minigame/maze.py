@@ -80,9 +80,22 @@ class Maze:
                 elif tile in ['3', 'X', 'S']:
                     pygame.draw.rect(screen, BLACK, (*dest, TILE_SIZE, TILE_SIZE))
 
-    def is_wall(self, x, y):
-        if x < 0 or x >= self.cols or y < 0 or y >= self.rows: return True
-        return self.layout[y][x] in ['1', '3', 'X']
+    def is_wall(self, x, y, is_enemy=False):
+        if x < 0 or x >= self.cols or y < 0 or y >= self.rows: 
+            return True
+        
+        tile = self.layout[y][x]
+
+        # '1' is Wall, '3' is Void. These are always blocked.
+        if tile in ['1', '3']:
+            return True
+        
+        # 'X' is the Gate. 
+        # If it is an enemy, they can pass. If it's the player, they are blocked.
+        if tile == 'X':
+            return not is_enemy
+
+        return False
     
     def is_loop(self, max_x, max_y, grid):
         return False

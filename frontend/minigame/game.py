@@ -10,9 +10,12 @@ from .button import Button
 class Game: 
     def __init__(self, selected_guinea_pig=None, player_inventory=None): 
         self.running = True
-        self.selected_guinea_pig = selected_guinea_pig
+        
+        # This data holds the color/sprite info
+        self.selected_guinea_pig = selected_guinea_pig 
+        
         self.player_inventory = player_inventory
-        self.collected_amount = 0 # Now represents number of FRUITS collected
+        self.collected_amount = 0 
 
         self.SCREEN_WIDTH = 672
         self.SCREEN_HEIGHT = 864
@@ -22,7 +25,7 @@ class Game:
         self.PACMAN_MAZE = generator.generate()
 
         # 2. Components
-        self.player = Player()
+        self.player = Player(guinea_pig_data=self.selected_guinea_pig)
         self.PACMAN_MAZE = self.player.add_player(self.PACMAN_MAZE)
         
         self.enemy = Enemy()

@@ -32,7 +32,8 @@ class MinigamePage:
 
     def initialize_review_screen(self):
         # This is now the number of fruits collected
-        fruit_count = self.game_instance.collected_amount
+        # Note: If your Game class calls it something else (like score), change 'collected_amount'
+        fruit_count = getattr(self.game_instance, 'collected_amount', 0)
         
         # --- SEND FOOD REWARD TO API ---
         if api and fruit_count > 0:
@@ -85,6 +86,7 @@ class MinigamePage:
             elif isinstance(result, (tuple, list)) and len(result) > 0 and result[0] == 'start_game':
                 _, self.selected_guinea_pig = result
                 
+                # We initialize the Game class from game.py
                 self.game_instance = Game(
                     selected_guinea_pig=self.selected_guinea_pig, 
                     player_inventory=self.player_inventory

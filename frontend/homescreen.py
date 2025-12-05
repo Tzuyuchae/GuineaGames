@@ -108,8 +108,7 @@ def homescreen_init(screen_w, screen_h):
 def refresh_visual_pigs(user_id):
     """
     Fetch pets from API and update sprites.
-    SMART UPDATE: Updates existing sprites with new data (like name changes)
-    instead of deleting/recreating them.
+    Now calculates boundaries based on actual screen size to prevent cutoff.
     """
     global visual_pigs, house_data
     
@@ -118,26 +117,33 @@ def refresh_visual_pigs(user_id):
     except Exception:
         return
 
-    # Map existing sprites by ID so we can update them in place
     existing_sprites = {s.data['id']: s for s in visual_pigs}
     new_visual_pigs = []
     
-    yard_min_x, yard_max_x = 50, 650
-    yard_min_y, yard_max_y = 300, 800
+    # Get actual screen dimensions
+    screen = pygame.display.get_surface()
+    sw, sh = screen.get_size()
+
+    # Define Safe Zone (Padding of 20px so they aren't on the absolute edge)
+    pad = 20
+    # Assuming bottom half of screen for yard
+    yard_min_x, yard_max_x = pad, sw - 60 - pad 
+    yard_min_y, yard_max_y = 300, sh - 60 - pad
     
     for pet_data in my_pets:
         pid = pet_data['id']
         
         if pid in existing_sprites:
-            # Update existing sprite with new data (e.g. new name)
             sprite = existing_sprites[pid]
             sprite.data = pet_data 
             new_visual_pigs.append(sprite)
         else:
-            # Create new sprite for new pet
             valid_spot = False
             attempts = 0
             
+            # Default safe spot (middle of yard)
+            rx, ry = sw // 2, yard_min_y + 50
+
             while not valid_spot and attempts < 20:
                 rx = random.randint(yard_min_x, yard_max_x)
                 ry = random.randint(yard_min_y, yard_max_y)
@@ -153,9 +159,6 @@ def refresh_visual_pigs(user_id):
                     valid_spot = True
                 attempts += 1
                 
-            if not valid_spot:
-                rx, ry = 600, 800
-
             sprite = GuineaPigSprite(rx, ry, pet_data)
             new_visual_pigs.append(sprite)
 
@@ -193,14 +196,13 @@ def homescreen_update(events, user_id):
 
     mouse_pos = pygame.mouse.get_pos()
     
+    # Handle Clicks
     for event in events:
         if event.type == pygame.MOUSEBUTTONDOWN:
-            
             # 1. Check Guinea Pig Clicks
             clicked_pig = False
             for sprite in reversed(visual_pigs):
                 if sprite.is_clicked(mouse_pos):
-                    # Fetch stats FRESH from the sprite (which has fresh data now)
                     selected_pig_stats = sprite.get_stats()
                     show_popup = True
                     clicked_pig = True
@@ -214,6 +216,20 @@ def homescreen_update(events, user_id):
                 rect = data["rect"]
                 if rect.collidepoint(mouse_pos):
                     return name
+    
+    # --- NEW: KEEP PIGS ON SCREEN ---
+    # This prevents them from wandering off the edges
+    screen = pygame.display.get_surface()
+    screen_rect = screen.get_rect()
+    
+    for sprite in visual_pigs:
+        # If the sprite has an update method, call it here to move the pig
+        if hasattr(sprite, 'update'):
+            sprite.update()
+
+        # Clamp ensures the rect stays strictly inside the screen
+        sprite.rect.clamp_ip(screen_rect)
+
     return None
 
 def homescreen_draw(screen, user_id):

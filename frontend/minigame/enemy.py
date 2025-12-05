@@ -1,6 +1,7 @@
 import pygame 
 import random
 import os
+from collections import deque
 from .settings import TILE_SIZE, GOLD
 
 class Enemy:
@@ -25,19 +26,59 @@ class Enemy:
         return s
     
     def move_towards_player(self, player_pos, maze):
-        # Slow down enemy (move every 20 frames)
+        # 1. Throttle speed (Move every 15 frames instead of 20 to make them slightly scarier)
         self.move_timer += 1
-        if self.move_timer < 20: return
+        if self.move_timer < 15: return
         self.move_timer = 0
 
-        px, py = player_pos
-        ex, ey = self.position
+        # 2. Find the smart path
+        next_step = self.bfs_pathfind(tuple(self.position), player_pos, maze)
+
+        # 3. Move
+        if next_step:
+            self.position = list(next_step)
+
+    def bfs_pathfind(self, start, goal, maze):
+        """
+        Calculates the shortest path using Breadth-First Search.
+        Returns the (x, y) of the immediate next step to take.
+        """
+        queue = deque([start])
+        came_from = {start: None}
         
-        # Simple AI: Try horizontal, then vertical
-        if ex < px and not maze.is_wall(ex + 1, ey): self.position[0] += 1
-        elif ex > px and not maze.is_wall(ex - 1, ey): self.position[0] -= 1
-        elif ey < py and not maze.is_wall(ex, ey + 1): self.position[1] += 1
-        elif ey > py and not maze.is_wall(ex, ey - 1): self.position[1] -= 1
+        found = False
+
+        while queue:
+            current = queue.popleft()
+            if current == goal:
+                found = True
+                break
+
+            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                next_node = (current[0] + dx, current[1] + dy)
+                
+                # --- CHANGE IS HERE ---
+                # We add 'is_enemy=True' so the ghost can walk through the 'X' gate
+                if not maze.is_wall(next_node[0], next_node[1], is_enemy=True):
+                    if next_node not in came_from:
+                        queue.append(next_node)
+                        came_from[next_node] = current
+        
+        if not found:
+            return None # Player is unreachable
+
+        # Backtrack from goal to start to find the FIRST step
+        current = goal
+        path = []
+        while current != start:
+            path.append(current)
+            current = came_from[current]
+        
+        # The path is in reverse (Goal -> ... -> Next Step -> Start)
+        # We want the last element (which is the Next Step)
+        if path:
+            return path[-1]
+        return None
     
     def add_enemies(self, grid):
         if self.seed is not None: random.seed(self.seed)
