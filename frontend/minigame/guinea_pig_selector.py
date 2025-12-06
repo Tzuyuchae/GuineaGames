@@ -66,8 +66,7 @@ class GuineaPigSelector:
         # Try various relative paths to find the asset
         paths_to_check = [
             os.path.join(base_path, "../../Global Assets/Sprites/More Sprites/BG Art/Title/BG_Title.png"),
-            os.path.join(base_path, "../../images/BG_Title.png"),
-            os.path.join(base_path, "../images/BG_Title.png")
+            os.path.join(base_path, "../images/BG_Title.png"),
         ]
         
         for p in paths_to_check:
@@ -80,92 +79,109 @@ class GuineaPigSelector:
 
     def _load_default_sprite(self):
         """Loads the default guinea pig sprite for fallback."""
-        base_path = os.path.dirname(os.path.abspath(__file__))
-        paths_to_check = [
-            os.path.join(base_path, "../../images/guineapig.png"),
-            os.path.join(base_path, "../images/guineapig.png"),
-            os.path.join(base_path, "../../Global Assets/guineapig.png")
-        ]
-        
-        for p in paths_to_check:
-            if os.path.exists(p):
-                try:
-                    img = pygame.image.load(p).convert_alpha()
-                    return pygame.transform.scale(img, (60, 60))
-                except: pass
-        
-        # Fallback square
         s = pygame.Surface((60, 60))
-        s.fill((150, 75, 0))
+        s.fill((150, 75, 0)) # Brown square
         return s
 
-    def _get_pet_sprite(self, pig_data):
-        """Finds and loads the specific sprite based on color using robust path finding."""
+    def _determine_hair_type(self, pig_data):
+        """
+        Helper to figure out if a pig is Long or Short hair
+        based on explicit data OR Breed.
+        """
+        # 1. Check explicit fields first
+        raw_type = pig_data.get('hair_type', pig_data.get('coat_length', None))
+        if raw_type:
+            rt = str(raw_type).lower()
+            if rt in ['long', 'fluffy', 'lh']: return 'Long'
+            if rt in ['short', 'smooth', 'sh']: return 'Short'
+
+        # 2. Infer from Species/Breed
+        species = pig_data.get('species', 'Guinea Pig')
+        # List of known long hair breeds
+        long_hair_breeds = [
+            "Abyssinian", "Peruvian", "Silkie", "Sheba", 
+            "Coronet", "Alpaca", "Lunkarya", "Texel"
+        ]
+        
+        if species in long_hair_breeds:
+            return 'Long'
+            
+        return 'Short'
+
+    def _get_pet_sprite(self, pig_data, hair_type_override=None):
+        """Finds and loads the specific sprite based on color AND hair length."""
         
         # 1. Determine Color
         color = "white"
         pig_id = 0
         
         if isinstance(pig_data, dict):
-            # API Dictionary
-            color = pig_data.get('color_phenotype', pig_data.get('color', 'White')).lower()
+            color = pig_data.get('color_phenotype', pig_data.get('color', 'White'))
             pig_id = pig_data.get('id', 0)
         else:
-            # Legacy Object
-            if hasattr(pig_data, 'phenotype') and isinstance(pig_data.phenotype, dict):
-                color = pig_data.phenotype.get('coat_color', 'white').lower()
-            elif hasattr(pig_data, 'color'):
-                color = str(pig_data.color).lower()
             pig_id = getattr(pig_data, 'id', 0)
+            color = "white"
 
-        # 2. Map color to filename keywords
+        if not color: color = "White"
+        color = str(color).lower()
+        
+        # 2. Determine Hair Type (Prefix)
+        if hair_type_override:
+            h_type = hair_type_override
+        else:
+            h_type = self._determine_hair_type(pig_data)
+            
+        is_long = (h_type == 'Long')
+        prefix = "LH" if is_long else "SH"
+
+        # 3. Map color to filename keywords
         sprite_color = "White" # Default
         if "brown" in color: sprite_color = "Brown"
         elif "orange" in color: sprite_color = "Orange"
-        elif "black" in color: sprite_color = "Brown" # Fallback for black
-        elif "mixed" in color: sprite_color = "Orange" # Fallback for mixed
+        elif "black" in color: sprite_color = "Brown" # Fallback
+        elif "mixed" in color: sprite_color = "Orange" # Fallback
         
-        # 3. Pick a variant (01-09) consistently based on ID
-        # This makes the same pig always have the same look
+        # 4. Pick a variant (01-09) consistently based on ID
         try:
-            # Convert ID string to int hash if needed
-            if isinstance(pig_id, str):
-                numeric_id = sum(ord(c) for c in pig_id)
-            else:
-                numeric_id = int(pig_id)
-            
+            numeric_id = int(pig_id)
             variant_num = (numeric_id % 9) + 1
         except:
             variant_num = 1
             
         variant_str = f"{variant_num:02d}"
         
-        filename = f"SH_GP_{sprite_color}_{variant_str}.png"
+        # 5. Build Filename
+        filename = f"{prefix}_GP_{sprite_color}_{variant_str}.png"
         
-        # 4. Build Path - Look in Global Assets
-        # Current file is in frontend/minigame/
-        # We need to go up to frontend, then to Global Assets
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # 6. Build Path & Load
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) 
         
-        sprite_folder_path = os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", "SH_GP_Sprites", "SH_GP_Sprites")
-        full_path = os.path.join(sprite_folder_path, filename)
+        # Construct path variations
+        folder_name = f"{prefix}_GP_Sprites"
+        possible_paths = [
+            os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", folder_name, folder_name, filename),
+            os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", folder_name, filename)
+        ]
         
-        # 5. Load
-        try:
-            if os.path.exists(full_path):
-                img = pygame.image.load(full_path).convert_alpha()
-                return pygame.transform.scale(img, (60, 60))
-            else:
-                # Try fallback to variant 01 if specific variant missing
-                fallback_name = f"SH_GP_{sprite_color}_01.png"
-                fallback_path = os.path.join(sprite_folder_path, fallback_name)
-                if os.path.exists(fallback_path):
-                    img = pygame.image.load(fallback_path).convert_alpha()
+        for sprite_path in possible_paths:
+            if os.path.exists(sprite_path):
+                try:
+                    img = pygame.image.load(sprite_path).convert_alpha()
                     return pygame.transform.scale(img, (60, 60))
-                    
-        except Exception as e:
-            print(f"Selector Sprite Error: {e}")
+                except Exception as e:
+                    print(f"Error loading sprite {filename}: {e}")
+                    break 
+
+        # Fallback to variant 01
+        fallback_name = f"{prefix}_GP_{sprite_color}_01.png"
+        fallback_path = os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", folder_name, folder_name, fallback_name)
         
+        if os.path.exists(fallback_path):
+            try:
+                img = pygame.image.load(fallback_path).convert_alpha()
+                return pygame.transform.scale(img, (60, 60))
+            except: pass
+
         return self.default_sprite
 
     def _load_pets(self):
@@ -173,35 +189,28 @@ class GuineaPigSelector:
 
         if self.inventory_pigs and len(self.inventory_pigs) > 0:
             for pig in self.inventory_pigs:
-                # Handle Dictionary (API Data)
-                if isinstance(pig, dict):
-                    pet_dict = {
-                        'id': pig.get('id', random.randint(1000,9999)),
-                        'name': pig.get('name', 'Unknown'),
-                        'species': pig.get('species', 'guinea_pig'),
-                        'color': pig.get('color_phenotype', pig.get('color', 'brown')),
-                        'speed': pig.get('speed', 50),
-                        'health': pig.get('health', 100),
-                        # Load smart sprite here!
-                        'sprite': self._get_pet_sprite(pig)
-                    }
-                # Handle Object (Legacy Data)
-                else:
-                    pet_dict = {
-                        'id': getattr(pig, 'id', random.randint(1000,9999)),
-                        'name': getattr(pig, 'name', 'Unknown'),
-                        'species': 'guinea_pig',
-                        'color': 'brown',
-                        'speed': getattr(pig, 'speed', 50),
-                        'health': 100,
-                        # Load smart sprite here!
-                        'sprite': self._get_pet_sprite(pig)
-                    }
-
+                
+                # --- VITAL: Determine hair type logic BEFORE creating dict ---
+                hair_type_val = self._determine_hair_type(pig)
+                
+                pet_dict = {
+                    'id': pig.get('id', random.randint(1000,9999)),
+                    'name': pig.get('name', 'Unknown'),
+                    'species': pig.get('species', 'Guinea Pig'),
+                    'color': pig.get('color_phenotype', pig.get('color', 'Brown')),
+                    
+                    # Store the determined hair type so the UI text is correct
+                    'hair_type': hair_type_val,
+                    
+                    'speed': pig.get('speed', 50),
+                    'health': pig.get('health', 100),
+                    
+                    # Pass the hair type explicitly to the sprite loader
+                    'sprite': self._get_pet_sprite(pig, hair_type_override=hair_type_val)
+                }
                 self.pets.append(pet_dict)
-
-        # Fallback Mock Data
         else:
+            print("No inventory pigs found. Loading Mocks.")
             self.pets = self._get_mock_pets()
 
         self._create_pet_buttons()
@@ -210,17 +219,13 @@ class GuineaPigSelector:
             self.selected_pet = self.pets[0]
 
     def _get_mock_pets(self):
-        # Create mock data but use the sprite loader to get real images if available
         mock_pigs = [
-            {'id': 1, 'name': 'Fluffy (Mock)', 'color': 'brown', 'speed': 55},
-            {'id': 2, 'name': 'Squeaky (Mock)', 'color': 'white', 'speed': 70},
-            {'id': 3, 'name': 'Nibbles (Mock)', 'color': 'orange', 'speed': 45}
+            {'id': 1, 'name': 'Fluffy (Mock)', 'color': 'brown', 'speed': 55, 'hair_type': 'Long'},
+            {'id': 2, 'name': 'Squeaky (Mock)', 'color': 'white', 'speed': 70, 'hair_type': 'Short'},
         ]
-        
-        # Enhance mock pigs with sprites
         for p in mock_pigs:
-            p['sprite'] = self._get_pet_sprite(p)
-            
+            # Mock objects need sprites too
+            p['sprite'] = self._get_pet_sprite(p, hair_type_override=p['hair_type'])
         return mock_pigs
 
     def _create_pet_buttons(self):
@@ -262,7 +267,7 @@ class GuineaPigSelector:
 
             if event.type == pygame.MOUSEWHEEL:
                 self.scroll_offset -= event.y
-                self.scroll_offset = max(0, min(self.scroll_offset, len(self.pets) - self.max_visible_pets))
+                self.scroll_offset = max(0, min(self.scroll_offset, max(0, len(self.pets) - self.max_visible_pets)))
 
         self.button_start.check_hover(mouse_pos)
         self.button_back.check_hover(mouse_pos)
@@ -282,62 +287,47 @@ class GuineaPigSelector:
         overlay.fill((0, 0, 0))
         screen.blit(overlay, (0, 0))
 
-        title_text = self.title_font.render("Select Your Guinea Pig", True, WHITE)
-        shadow_text = self.title_font.render("Select Your Guinea Pig", True, BLACK)
+        title_text = self.title_font.render("Select Your Guinea Pig", True, (255, 255, 255))
         title_rect = title_text.get_rect(center=(self.screen_width // 2, 50))
-        
-        screen.blit(shadow_text, (title_rect.x + 2, title_rect.y + 2))
         screen.blit(title_text, title_rect)
 
         if not self.pets:
-            no_pets_text = self.pet_font.render("No guinea pigs available!", True, (255, 100, 100))
+            no_pets_text = self.pet_font.render("No guinea pigs found!", True, (255, 100, 100))
             screen.blit(no_pets_text, no_pets_text.get_rect(center=(self.screen_width // 2, 300)))
         else:
-            for i, (pet, button) in enumerate(zip(self.pets, self.pet_buttons)):
+            start_index = int(self.scroll_offset)
+            end_index = min(len(self.pets), start_index + self.max_visible_pets)
+            
+            for i in range(start_index, end_index):
+                pet = self.pets[i]
+                slot_index = i - start_index
+                button = self.pet_buttons[i]
+                
+                base_y = 120 + slot_index * (80 + 10)
+                button.rect.y = base_y
+                button.y = base_y + 40 
+
                 if pet == self.selected_pet:
                     highlight_rect = button.rect.inflate(6, 6)
-                    pygame.draw.rect(screen, GOLD, highlight_rect, 3, border_radius=15)
+                    pygame.draw.rect(screen, (255, 215, 0), highlight_rect, 3, border_radius=15)
 
                 button.draw(screen)
 
-                # 1. Draw Sprite
                 if pet['sprite']:
                     sprite_rect = pet['sprite'].get_rect(
                         midleft=(button.rect.left + 15, button.rect.centery)
                     )
                     screen.blit(pet['sprite'], sprite_rect)
 
-                # 2. Name
                 name_str = str(pet['name'])
-                if len(name_str) > 20: name_str = name_str[:20] + "..."
-                name_surf = self.pet_font.render(name_str, True, WHITE)
+                name_surf = self.pet_font.render(name_str, True, (255, 255, 255))
                 screen.blit(name_surf, (button.rect.left + 90, button.rect.top + 15))
 
-                # 3. Stats
-                color_val = str(pet.get('color', 'unknown')).title()
-                color_text = self.info_font.render(f"Color: {color_val}", True, (200, 200, 200))
-                speed_text = self.info_font.render(f"Speed: {pet.get('speed', 50)}", True, (200, 200, 200))
-
-                screen.blit(color_text, (button.rect.left + 90, button.rect.bottom - 30))
-                screen.blit(speed_text, (button.rect.right - speed_text.get_width() - 20, button.rect.bottom - 30))
-
-        # Selected Panel
-        if self.selected_pet:
-            panel_y = self.screen_height - 200
-            panel_rect = pygame.Rect(50, panel_y, self.screen_width - 100, 80)
-            
-            pygame.draw.rect(screen, (30, 30, 50), panel_rect, border_radius=10)
-            pygame.draw.rect(screen, GOLD, panel_rect, 3, border_radius=10)
-
-            selected_text = self.pet_font.render("Selected:", True, GOLD)
-            name_text = self.pet_font.render(str(self.selected_pet['name']), True, WHITE)
-
-            screen.blit(selected_text, (panel_rect.x + 20, panel_y + 15))
-            screen.blit(name_text, (panel_rect.x + 20, panel_y + 45))
-            
-            if self.selected_pet['sprite']:
-                s_rect = self.selected_pet['sprite'].get_rect(midright=(panel_rect.right - 30, panel_rect.centery))
-                screen.blit(self.selected_pet['sprite'], s_rect)
+                # Display correct hair type info
+                h_type = str(pet.get('hair_type', 'Short')).capitalize()
+                stats_text = f"Spd: {pet.get('speed', 50)} | {h_type} Hair | {pet.get('color', '?')}"
+                info_surf = self.info_font.render(stats_text, True, (200, 200, 200))
+                screen.blit(info_surf, (button.rect.left + 90, button.rect.bottom - 30))
 
         self.button_start.draw(screen)
         self.button_back.draw(screen)

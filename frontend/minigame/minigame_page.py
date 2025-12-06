@@ -19,10 +19,14 @@ class MinigamePage:
         self.pause_menu = PauseMenu(672, 864) 
 
     def initialize_selector(self):
-        # Fetch fresh inventory if possible
+        """Fetches fresh data and creates the selector."""
+        print("Initializing Minigame Selector - Fetching Pets...")
         try:
+            # Fetch user pets from API
             owned_pigs = api.get_user_pets(self.user_id)
-        except:
+            print(f"Found {len(owned_pigs)} pets for minigame.")
+        except Exception as e:
+            print(f"Error fetching pets for minigame: {e}")
             owned_pigs = []
             
         self.guinea_pig_selector = GuineaPigSelector(
@@ -34,16 +38,15 @@ class MinigamePage:
         # Get fruit count from game instance
         fruit_count = getattr(self.game_instance, 'collected_amount', 0)
         
-        # --- CALCULATE REWARDS ---
-        # 1. Coin Reward (10% of fruit collected)
-        coin_amount = int(fruit_count * 0.1)
+        # Reward Logic
+        coin_amount = int(fruit_count * 0.5) # Example: 50% conversion
         if coin_amount < 1 and fruit_count > 0:
-            coin_amount = 1 # Minimum 1 coin if you played well enough to get fruit
+            coin_amount = 1 
 
         if api and fruit_count > 0:
-            print(f"Rewards: {fruit_count} Carrots, {coin_amount} Coins")
+            print(f"Minigame Results: {fruit_count} Fruits, {coin_amount} Coins")
             try:
-                # 1. Give Fruit (Carrots)
+                # Give Carrots
                 api.add_inventory_item(
                     self.user_id, 
                     item_name="Carrot", 
@@ -51,7 +54,7 @@ class MinigamePage:
                     quantity=fruit_count
                 )
                 
-                # 2. Give Coins
+                # Give Coins
                 if coin_amount > 0:
                     api.create_transaction(
                         self.user_id, 
@@ -60,19 +63,17 @@ class MinigamePage:
                         desc="Minigame Reward"
                     )
                 
-                # 3. Update Score (Optional Leaderboard logic)
-                # api.update_user_score(self.user_id, fruit_count * 10)
-                
             except Exception as e:
                 print(f"Reward Error: {e}")
         
-        # Initialize Score Screen
-        self.final_score_screen = FinalScoreScreen(fruit_count, 0)
+        self.final_score_screen = FinalScoreScreen(fruit_count, coin_amount)
 
     def update(self, events):
-        if self.guinea_pig_selector is None:
+        # Initialize selector if needed
+        if self.state == 'selector' and self.guinea_pig_selector is None:
             self.initialize_selector()
 
+        # --- PLAYING STATE ---
         if self.state == 'playing':
             for event in events:
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -88,6 +89,7 @@ class MinigamePage:
                         return 'homescreen'
                 return None 
 
+        # --- SELECTOR STATE ---
         if self.state == 'selector':
             result = self.guinea_pig_selector.update(events)
 
@@ -96,9 +98,12 @@ class MinigamePage:
                 return 'homescreen'
 
             elif isinstance(result, (tuple, list)) and len(result) > 0 and result[0] == 'start_game':
+                # Unwrap the tuple: ('start_game', pet_data_dict)
                 _, self.selected_guinea_pig = result
                 
-                # We initialize the Game class from game.py
+                print(f"Starting game with: {self.selected_guinea_pig['name']}")
+                
+                # Initialize Game
                 self.game_instance = Game(
                     selected_guinea_pig=self.selected_guinea_pig, 
                     player_inventory=self.player_inventory
@@ -106,16 +111,17 @@ class MinigamePage:
                 self.state = 'playing'
                 self.paused = False
 
+        # --- GAME UPDATE ---
         elif self.state == 'playing':
             if self.game_instance:
                 if not self.paused:
                     self.game_instance.update(events)
                     
                     if not self.game_instance.running:
-                        if self.final_score_screen is None:
-                            self.initialize_review_screen()
+                        self.initialize_review_screen()
                         self.state = 'reviewing_score'
 
+        # --- REVIEW STATE ---
         elif self.state == 'reviewing_score':
             if self.final_score_screen:
                 result = self.final_score_screen.update(events)
@@ -136,9 +142,10 @@ class MinigamePage:
             self.final_score_screen.draw(screen)
 
     def _reset_state(self):
+        """Resets everything so next time we open minigame, it reloads."""
         self.state = 'selector'
         self.game_instance = None
         self.selected_guinea_pig = None
-        self.guinea_pig_selector = None
+        self.guinea_pig_selector = None # Setting to None forces reload in update()
         self.final_score_screen = None
         self.paused = False

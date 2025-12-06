@@ -112,4 +112,14 @@ class APIClient:
         except:
             return False
 
+    # [Insert into APIClient class]
+
+    def feed_pet(self, pet_id: int, item_name: str):
+        """Feed a specific pet with an item from inventory."""
+        return self._post(f"/pets/{pet_id}/feed", json={"item_name": item_name})
+
+    def trigger_daily_decay(self, user_id: int):
+        """Trigger hunger increase and health decrease for a user's pets."""
+        return self._post(f"/pets/decay/{user_id}")
+
 api = APIClient()

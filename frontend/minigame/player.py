@@ -10,20 +10,30 @@ class Player:
         self.color = color
         self.seed = seed
         
-        # Load Sprite
-        self.image = self._load_sprite(guinea_pig_data)
+        # --- SPRITE LOADING ---
+        # 1. Check if the data already contains the loaded Surface (from Selector)
+        # This guarantees visual consistency with the menu.
+        if guinea_pig_data and isinstance(guinea_pig_data, dict) and 'sprite' in guinea_pig_data:
+            self.image = guinea_pig_data['sprite']
+        else:
+            # 2. Fallback: Load it ourselves if missing
+            self.image = self._load_sprite(guinea_pig_data)
+
+        # Scale to fit tile size perfectly
+        self.image = pygame.transform.scale(self.image, (TILE_SIZE, TILE_SIZE))
         self.rect = pygame.Rect(0, 0, TILE_SIZE, TILE_SIZE)
 
         # --- PHYSICS & MOMENTUM ---
         # Get stats from pet data
         raw_speed = 50
         raw_endurance = 50
+        
         if guinea_pig_data:
-            # Handle both Dict (API) and Object (Legacy)
             if isinstance(guinea_pig_data, dict):
                 raw_speed = guinea_pig_data.get('speed', 50)
                 raw_endurance = guinea_pig_data.get('endurance', 50)
             else:
+                # Legacy Object support
                 raw_speed = getattr(guinea_pig_data, 'speed', 50)
                 raw_endurance = getattr(guinea_pig_data, 'endurance', 50)
 
@@ -41,63 +51,107 @@ class Player:
         self.is_moving = False
         self.is_fatigued = False
 
-    def _load_sprite(self, pet_data):
-        """Loads specific sprite using robust path finding logic (Matching Store/Selector)"""
+    def _determine_hair_type(self, pet_data):
+        """Helper to determine Short (SH) or Long (LH) hair."""
+        # 1. Check explicit fields
+        if isinstance(pet_data, dict):
+            raw = pet_data.get('hair_type', pet_data.get('coat_length', None))
+            species = pet_data.get('species', '')
+        else:
+            raw = getattr(pet_data, 'hair_type', None)
+            species = getattr(pet_data, 'species', '')
+
+        if raw:
+            rt = str(raw).lower()
+            if rt in ['long', 'fluffy', 'lh']: return 'Long'
+            if rt in ['short', 'smooth', 'sh']: return 'Short'
+
+        # 2. Infer from Species
+        long_hair_breeds = [
+            "Abyssinian", "Peruvian", "Silkie", "Sheba", 
+            "Coronet", "Alpaca", "Lunkarya", "Texel"
+        ]
+        if species in long_hair_breeds:
+            return 'Long'
         
-        # 1. Determine Color & ID
+        return 'Short'
+
+    def _load_sprite(self, pet_data):
+        """Loads specific sprite using robust path finding logic."""
+        
+        # 1. Determine Color, ID, and Hair Type
         color = "white"
         pig_id = 0
         
         if pet_data:
             if isinstance(pet_data, dict):
-                color = pet_data.get('color_phenotype', pet_data.get('color', 'White')).lower()
+                color = pet_data.get('color_phenotype', pet_data.get('color', 'White'))
                 pig_id = pet_data.get('id', 0)
             else:
+                # Legacy Object
                 if hasattr(pet_data, 'phenotype') and isinstance(pet_data.phenotype, dict):
-                    color = pet_data.phenotype.get('coat_color', 'white').lower()
+                    color = pet_data.phenotype.get('coat_color', 'white')
                 elif hasattr(pet_data, 'color'):
-                    color = str(pet_data.color).lower()
+                    color = str(pet_data.color)
                 pig_id = getattr(pet_data, 'id', 0)
+
+        color = str(color).lower()
+        hair_type = self._determine_hair_type(pet_data)
+        
+        # Determine Prefix
+        prefix = "LH" if hair_type == 'Long' else "SH"
 
         # 2. Map color to filename keywords
         sprite_color = "White" # Default
         if "brown" in color: sprite_color = "Brown"
         elif "orange" in color: sprite_color = "Orange"
-        elif "black" in color: sprite_color = "Brown" # Fallback for black
-        elif "mixed" in color: sprite_color = "Orange" # Fallback for mixed
+        elif "black" in color: sprite_color = "Brown" # Fallback
+        elif "mixed" in color: sprite_color = "Orange" # Fallback
 
         # 3. Pick a variant (01-09) consistently based on ID
+        # Uses the exact same math as Selector/Homescreen
         try:
-            if isinstance(pig_id, str):
-                numeric_id = sum(ord(c) for c in pig_id)
+            if isinstance(pig_id, int):
+                numeric_id = pig_id
             else:
-                numeric_id = int(pig_id)
+                numeric_id = sum(ord(c) for c in str(pig_id))
+            
             variant_num = (numeric_id % 9) + 1
         except:
             variant_num = 1
             
         variant_str = f"{variant_num:02d}"
-        filename = f"SH_GP_{sprite_color}_{variant_str}.png"
+        
+        # 4. Build Filename
+        filename = f"{prefix}_GP_{sprite_color}_{variant_str}.png"
 
-        # 4. Build Path
+        # 5. Build Path
         # Base = frontend/minigame -> go up to frontend -> Global Assets
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        sprite_folder = os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", "SH_GP_Sprites", "SH_GP_Sprites")
-        full_path = os.path.join(sprite_folder, filename)
+        
+        folder_name = f"{prefix}_GP_Sprites"
+        
+        possible_paths = [
+            os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", folder_name, folder_name, filename),
+            os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", folder_name, filename)
+        ]
 
-        # 5. Load
-        try:
+        # 6. Load
+        for full_path in possible_paths:
             if os.path.exists(full_path):
-                img = pygame.image.load(full_path).convert_alpha()
-                return pygame.transform.scale(img, (TILE_SIZE, TILE_SIZE))
-            
-            # Fallback to variant 01
-            fallback_name = f"SH_GP_{sprite_color}_01.png"
-            fallback_path = os.path.join(sprite_folder, fallback_name)
-            if os.path.exists(fallback_path):
+                try:
+                    img = pygame.image.load(full_path).convert_alpha()
+                    return img # Return original size, scaled in __init__
+                except: pass
+
+        # Fallback to variant 01
+        fallback_name = f"{prefix}_GP_{sprite_color}_01.png"
+        fallback_path = os.path.join(base_dir, "Global Assets", "Sprites", "Guinea Pigs", folder_name, folder_name, fallback_name)
+        if os.path.exists(fallback_path):
+            try:
                 img = pygame.image.load(fallback_path).convert_alpha()
-                return pygame.transform.scale(img, (TILE_SIZE, TILE_SIZE))
-        except: pass
+                return img
+            except: pass
 
         # Final Fallback
         s = pygame.Surface((TILE_SIZE, TILE_SIZE))

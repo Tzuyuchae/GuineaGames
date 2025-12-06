@@ -11,31 +11,34 @@ class GuineaPigSprite:
     Combines the visual logic of the uploaded file with the data structure of the API.
     """
     def __init__(self, x, y, data_dict):
-        """
-        x, y: Position on screen
-        data_dict: The dictionary returned from the API (e.g. {'name': 'Bob', 'color': 'Brown', ...})
-        """
         self.data = data_dict
         
         # --- DETERMINE COAT LENGTH ---
         # 1. Try to get explicit length from data
         c_len = self.data.get('coat_length', None)
+        h_type = self.data.get('hair_type', None)
         
-        # 2. If missing/null, infer from Species/Breed
-        if not c_len or c_len == 'None':
+        final_len = "Short" # Default
+        
+        # Check explicit flags
+        if c_len and str(c_len).lower() in ['long', 'fluffy', 'lh']: final_len = "Long"
+        if h_type and str(h_type).lower() in ['long', 'fluffy', 'lh']: final_len = "Long"
+
+        # 2. If still Short, check Breed/Species list
+        if final_len == "Short":
             species = self.data.get('species', 'Guinea Pig')
             # List of breeds that are known to be Long Haired
-            long_hair_breeds = ["Abyssinian", "Peruvian", "Silkie", "Sheba", "Coronet", "Alpaca", "Lunkarya"]
-            
+            long_hair_breeds = [
+                "Abyssinian", "Peruvian", "Silkie", "Sheba", 
+                "Coronet", "Alpaca", "Lunkarya", "Texel"
+            ]
             if species in long_hair_breeds:
-                c_len = "Long"
-            else:
-                c_len = "Short"
+                final_len = "Long"
 
         # Determine Phenotype for sprite loading
         self.phenotype = {
             'coat_color': self.data.get('color_phenotype', self.data.get('color', 'White')),
-            'coat_length': c_len
+            'coat_length': final_len
         }
 
         # Load the correct sprite
@@ -48,36 +51,43 @@ class GuineaPigSprite:
         """Load sprite based on guinea pig's phenotype string from API"""
         try:
             coat_length = self.phenotype.get('coat_length', 'Short')
-            # Clean up color string (e.g., "Brown" or "White")
             raw_color = self.phenotype.get('coat_color', 'White')
             
-            # Simple mapping to handle complex API strings if necessary
+            # Simple mapping to handle complex API strings
             coat_color = 'White'
             if 'Brown' in raw_color: coat_color = 'Brown'
             elif 'Orange' in raw_color: coat_color = 'Orange'
-            elif 'Black' in raw_color: coat_color = 'Brown' # Fallback for black if no specific sprite
+            elif 'Black' in raw_color: coat_color = 'Brown' # Fallback
+            elif 'Mixed' in raw_color: coat_color = 'Orange' # Fallback
             
             # Determine sprite prefix (SH = Short Hair, LH = Long Hair)
             prefix = 'SH' if 'Short' in coat_length else 'LH'
 
-            # Pick a random variant (01-09) to make them look alive, 
-            # or hash the ID so the same pig always has the same variant
+            # --- FIX: STABLE VARIANT SELECTION ---
+            # Don't use hash(), it changes every restart. Use int(id).
             if 'id' in self.data:
-                # distinct variant based on ID
-                variant = (hash(str(self.data['id'])) % 9) + 1
+                try:
+                    # Convert ID to int (sum of chars if it's a string, or just int)
+                    pid = self.data['id']
+                    if isinstance(pid, int):
+                        numeric_id = pid
+                    else:
+                        numeric_id = sum(ord(c) for c in str(pid))
+                    
+                    variant = (numeric_id % 9) + 1
+                except:
+                    variant = 1
             else:
                 variant = random.randint(1, 9)
             
             variant_str = f"{variant:02d}"
 
             # Build path to sprite
-            # Folder Structure: Global Assets/Sprites/Guinea Pigs/SH_GP_Sprites/SH_GP_Sprites/filename
-            # We check a few variations to be safe against folder structure changes
-            
             folder_name = f"{prefix}_GP_Sprites"
             filename = f"{prefix}_GP_{coat_color}_{variant_str}.png"
             
             # Construct possible paths
+            # Note: SCRIPT_DIR is inside 'frontend', assets are usually in 'frontend/Global Assets'
             paths_to_check = [
                 os.path.join(SCRIPT_DIR, "Global Assets", "Sprites", "Guinea Pigs", folder_name, folder_name, filename),
                 os.path.join(SCRIPT_DIR, "Global Assets", "Sprites", "Guinea Pigs", folder_name, filename),
@@ -87,7 +97,7 @@ class GuineaPigSprite:
             for p in paths_to_check:
                 if os.path.exists(p):
                     img = pygame.image.load(p).convert_alpha()
-                    return pygame.transform.scale(img, (80, 80)) # Scaled for UI
+                    return pygame.transform.scale(img, (80, 80)) 
             
             # If specific variant missing, try 01
             fallback_name = f"{prefix}_GP_{coat_color}_01.png"
@@ -102,7 +112,6 @@ class GuineaPigSprite:
 
         # Final fallback: colored square
         s = pygame.Surface((80, 80))
-        # Default color brown-ish
         s.fill((150, 75, 0))
         return s
 
@@ -118,17 +127,29 @@ class GuineaPigSprite:
         speed = self.data.get('speed', 0)
         endurance = self.data.get('endurance', 0)
         hunger = self.data.get('hunger', 0)
+        health = self.data.get('health', 100)
         age_val = "Adult" if self.data.get('age_days', 0) >= 1 else "Baby"
         breed_val = self.data.get('species', 'Guinea Pig')
 
+        # Check death status
+        is_dead = False
+        if health <= 0 or self.data.get('is_dead', False):
+            is_dead = True
+
         return {
             "Name": name,
-            "Breed": breed_val, # Add breed to stats
+            "Breed": breed_val,
             "Speed": speed,
             "Endurance": endurance,
             "Hunger": f"{hunger}/3",
+            "Health": f"{health}/100",
             "Age": age_val,
             "image_surface": self.image,
-            "pet_id": self.data.get('id'), # Crucial for API calls
-            "raw_data": self.data
+            "pet_id": self.data.get('id'),
+            "raw_data": self.data,
+            "is_dead": is_dead
         }
+    
+    def update(self):
+        # Placeholder for simple animations (hopping)
+        pass

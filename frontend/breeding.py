@@ -232,27 +232,37 @@ class BreedingPage:
         self.message = "Breeding..."
         self.is_breeding_anim = True
         self.breeding_progress = 50 
-        name = self.input_name if self.input_name else "Baby"
+        
+        # --- FIX: Ensure name is captured safely ---
+        # .strip() removes accidental spaces
+        final_name = self.input_name.strip()
+        if not final_name:
+            final_name = "Baby"
         
         try:
             data = {
                 "parent1_id": self.parent1.data['id'],
                 "parent2_id": self.parent2.data['id'],
-                "child_name": name,
+                "child_name": final_name, # <--- Use the cleaned name
                 "child_species": "Guinea Pig",
                 "child_color": "Mixed", 
                 "owner_id": self.user_id
             }
             
-            response = api._post("/genetics/breed/", json=data)
+            # Debug print to see what we are sending
+            print(f"Sending Breed Request: {data}")
+
+            response = api._post("/genetics/breed", json=data) # Removed trailing slash just in case
             
-            # --- FORCE LOCAL COOLDOWN UPDATE ---
-            # Update local cache immediately so it shows up instantly
+            # Force local update
             now = time.time()
             self.local_cooldowns[self.parent1.data['id']] = now
             self.local_cooldowns[self.parent2.data['id']] = now
             
-            self.message = f"Born: {response.get('child_name')}!"
+            # Use response name to confirm what server saved
+            server_name = response.get('child_name', final_name)
+            self.message = f"Born: {server_name}!"
+            
             self.message_color = GREEN
             self.naming_mode = False
             self.parent1 = None

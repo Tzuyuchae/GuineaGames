@@ -25,6 +25,7 @@ class Game:
         self.PACMAN_MAZE = generator.generate()
 
         # 2. Components
+        # We pass the full pig data dict to Player
         self.player = Player(guinea_pig_data=self.selected_guinea_pig)
         self.PACMAN_MAZE = self.player.add_player(self.PACMAN_MAZE)
         
@@ -67,7 +68,6 @@ class Game:
             self.PACMAN_MAZE, count = self.fruit.if_collected(
                 (self.player.pos_x, self.player.pos_y), self.PACMAN_MAZE
             )
-            # CHANGE: 1 Fruit = 1 Item (removed * 10 multiplier)
             self.collected_amount += count 
 
     def check_exit(self):
@@ -75,19 +75,19 @@ class Game:
             self.player.pos_y == 0 or self.player.pos_y == self.maze.rows - 1):
             print("Exited the maze!")
             self.running = False
-            self.collected_amount += 2 # Bonus 2 fruits for escaping
+            self.collected_amount += 2 
 
     def check_lose(self):
         if self.player.player_pos() == self.enemy.enemy_pos():
             print("You Lose!")
             self.running = False
-            self.collected_amount = 0 # Lose everything
+            self.collected_amount = 0 
 
     def check_win(self):
         if self.fruit.all_fruits_collected(self.PACMAN_MAZE):
             print("You Win!")
             self.running = False
-            self.collected_amount += 5 # Bonus 5 fruits for clearing map
+            self.collected_amount += 5 
 
     def draw(self, screen):
         screen.fill((40, 40, 60)) 
@@ -98,7 +98,7 @@ class Game:
             self.maze.width + 10, self.maze.height + 10
         )
         pygame.draw.rect(screen, (0, 0, 0), backdrop_rect)
-        pygame.draw.rect(screen, GOLD, backdrop_rect, 2)
+        pygame.draw.rect(screen, (255, 215, 0), backdrop_rect, 2)
 
         # Draw Elements
         self.maze.draw(screen, self.offset_x, self.offset_y)

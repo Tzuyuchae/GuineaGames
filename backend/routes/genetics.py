@@ -161,12 +161,14 @@ def breed_pets(breeding_request: schemas.BreedingRequest, db: Session = Depends(
         # Use defaults if optional fields are missing
         child_species = breeding_request.child_species if breeding_request.child_species else "Guinea Pig"
         child_color = breeding_request.child_color if breeding_request.child_color else "Mixed"
-
+        
+        # --- FIX: Ensure child_name is passed explicitly from request ---
+        # The BreedingEngine.breed function needs to accept the custom name
         offspring, punnett_squares, inheritance_summary = BreedingEngine.breed(
             db,
             parent1,
             parent2,
-            breeding_request.child_name,
+            breeding_request.child_name, # <--- Passing the custom name here
             child_species,
             child_color,
             breeding_request.owner_id
@@ -184,7 +186,7 @@ def breed_pets(breeding_request: schemas.BreedingRequest, db: Session = Depends(
                 punnett_square=ps["punnett_square"]
             ))
 
-        # FIX: Only use stats that exist in models.Pet (Removed Strength/Intelligence)
+        # Only use stats that exist in models.Pet
         estimated_stats = {
             "speed": offspring.speed,
             "endurance": offspring.endurance,
@@ -193,7 +195,7 @@ def breed_pets(breeding_request: schemas.BreedingRequest, db: Session = Depends(
 
         return schemas.BreedingOutcome(
             child_id=offspring.id,
-            child_name=offspring.name,
+            child_name=offspring.name, # This will now reflect the custom name
             child_genetics=offspring.genetic_code,
             punnett_squares=punnett_responses,
             estimated_stats=estimated_stats,
