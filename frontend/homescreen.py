@@ -23,12 +23,16 @@ house_data = {}
 static_obstacles = []
 
 # --- Logic Globals ---
+# Start at 8:00 AM
 game_time = {
     "year": 1, "month": 1, "day": 1, "hour": 8, "minute": 0
 }
 
 # --- SPEED SETTING ---
-REAL_SECONDS_PER_GAME_MINUTE = 0.005 
+# 0.005 = Super Fast (Dev Mode)
+# 0.05  = Playable Fast (1 Game Day = ~1 min 12 sec)
+# 0.1   = Relaxed (1 Game Day = ~2 min 24 sec)
+REAL_SECONDS_PER_GAME_MINUTE = 0.05 
 
 last_update = 0
 
@@ -40,7 +44,6 @@ selected_pig_stats = None
 needs_refresh = True 
 
 # --- DEATH QUEUE ---
-# Stores list of dead pet names to show "RIP" popups for
 dead_pets_queue = [] 
 
 # --- Data Cache ---
@@ -48,6 +51,7 @@ cached_user_data = None
 cached_inventory = None
 
 def make_glow(mask, intensity=22):
+    """Soft, translucent Stardew-style glow."""
     w, h = mask.get_size()
     glow = pygame.Surface((w + intensity * 2, h + intensity * 2), pygame.SRCALPHA)
     base = mask.to_surface(setcolor=(255, 240, 150, 5), unsetcolor=(0, 0, 0, 0))
@@ -88,6 +92,7 @@ def homescreen_init(screen_w, screen_h):
     background = pygame.transform.scale(raw_bg, (new_w, new_h))
     BG_POS = ((screen_w - new_w) // 2, 0)
 
+    # --- DEFINING BUILDINGS ---
     houses_original = {
         "home":       (132, 83, 215, 232),
         "mini_games": (348, 331, 202, 215),
@@ -110,6 +115,7 @@ def homescreen_init(screen_w, screen_h):
         rect = pygame.Rect(sx, sy, sw, sh)
         house_data[name] = {"rect": rect, "img": house_img, "mask": mask, "glow": glow}
 
+    # --- DEFINING EXTRA OBSTACLES (Trees, Fences) ---
     obstacles_original = [
         (30, 480, 120, 100),   
         (220, 580, 100, 40),   
@@ -125,17 +131,27 @@ def homescreen_init(screen_w, screen_h):
         static_obstacles.append(pygame.Rect(sx, sy, sw, sh))
 
 def refresh_game_state(user_id):
+    """
+    Fetches ALL data from API at once.
+    Only called when necessary (Startup, Popup Close, Day Change).
+    """
     global visual_pigs, house_data, static_obstacles, cached_user_data, cached_inventory
+    
     print("Refreshing game state...") 
 
+    # 1. Fetch User Data (Sidebar)
     try:
         cached_user_data = api.get_user(user_id)
         cached_inventory = api.get_user_inventory(user_id)
-    except: pass
+    except Exception as e:
+        # print(f"Sidebar update failed: {e}")
+        pass
 
+    # 2. Fetch Pets (Visuals)
     try:
         my_pets = api.get_user_pets(user_id)
-    except: return
+    except Exception:
+        return
 
     existing_sprites = {s.data['id']: s for s in visual_pigs}
     new_visual_pigs = []
@@ -154,17 +170,26 @@ def refresh_game_state(user_id):
 
         if pid in existing_sprites:
             sprite = existing_sprites[pid]
-            sprite.data = pet_data
+            sprite.data = pet_data # Update stats in existing sprite
+            
             is_safe = True
             for house_info in house_data.values():
                 if sprite.rect.colliderect(house_info["rect"].inflate(-10, -10)):
-                    is_safe = False; break
+                    is_safe = False
+                    break
+            
             if is_safe:
                 for obs in static_obstacles:
-                    if sprite.rect.colliderect(obs): is_safe = False; break
+                    if sprite.rect.colliderect(obs):
+                        is_safe = False
+                        break
+
             if is_safe:
                 for other_pig in new_visual_pigs:
-                    if sprite.rect.colliderect(other_pig.rect): is_safe = False; break
+                    if sprite.rect.colliderect(other_pig.rect):
+                        is_safe = False
+                        break
+            
             if is_safe:
                 needs_new_spot = False 
                 new_visual_pigs.append(sprite)
@@ -176,15 +201,24 @@ def refresh_game_state(user_id):
                 ry = random.randint(yard_min_y, yard_max_y)
                 potential_rect = pygame.Rect(rx, ry, 60, 50)
                 collision = False
+                
                 for house_info in house_data.values():
-                    if potential_rect.colliderect(house_info["rect"]): collision = True; break
+                    if potential_rect.colliderect(house_info["rect"]):
+                        collision = True
+                        break
                 if not collision:
                     for obs in static_obstacles:
-                        if potential_rect.colliderect(obs): collision = True; break
+                        if potential_rect.colliderect(obs):
+                            collision = True
+                            break
                 if not collision:
                     for existing_pig in new_visual_pigs:
-                        if potential_rect.colliderect(existing_pig.rect.inflate(10, 10)): collision = True; break
-                if not collision: final_pos = (rx, ry); break 
+                        if potential_rect.colliderect(existing_pig.rect.inflate(10, 10)):
+                            collision = True
+                            break
+                if not collision:
+                    final_pos = (rx, ry)
+                    break 
             
             if final_pos is None:
                 safe_x = pad + (len(new_visual_pigs) * 65) % (sw - 100)
@@ -223,7 +257,6 @@ def homescreen_update(events, user_id):
             "image_surface": img
         }
         show_popup = True
-        # IMPORTANT: Do not refresh game state yet! Wait for popup close.
         return None
 
     # --- 2. HANDLE REFRESH ---
@@ -237,11 +270,7 @@ def homescreen_update(events, user_id):
             action = popup_manager.handle_event(event)
             if action == "close":
                 show_popup = False
-                # If we just closed a death popup, NOW we refresh to delete the sprite
-                if selected_pig_stats and selected_pig_stats.get("is_dead"):
-                    needs_refresh = True
-                else:
-                    needs_refresh = True 
+                needs_refresh = True 
         return None
 
     # --- 4. CLOCK LOGIC ---
@@ -275,12 +304,9 @@ def homescreen_update(events, user_id):
         try:
             result = api.trigger_daily_decay(user_id)
             if result.get("dead_pets"):
-                # Add dead pets to the queue to show popups
                 dead_pets_queue.extend(result['dead_pets'])
                 print(f"Queueing death popups for: {result['dead_pets']}")
             
-            # If nothing died, we can refresh immediately to show hunger bars
-            # If something died, the refresh is deferred until popup closes
             if not result.get("dead_pets"):
                 needs_refresh = True
                 
@@ -292,11 +318,12 @@ def homescreen_update(events, user_id):
     
     for event in events:
         if event.type == pygame.KEYDOWN:
+            # === DEBUG: Press 'T' to skip a day (Kept for manual testing) ===
             if event.key == pygame.K_t:
                 print("DEBUG: Skipping Day...")
                 game_time["day"] += 1
-                game_time["hour"] = 8 # Reset to morning
-                needs_refresh = True # Just force refresh, skipping decay call for debug safety
+                game_time["hour"] = 8 
+                needs_refresh = True 
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             clicked_pig = False
