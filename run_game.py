@@ -45,36 +45,41 @@ def wait_for_backend(timeout_seconds: int = 10) -> bool:
 
 
 def main():
-    # ---- Locate base directory (supports PyInstaller) ----
+    # 1. Determine the path to the CODE (Internal)
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        # Running inside a PyInstaller bundle
-        base_dir = Path(sys._MEIPASS)
+        # Running inside PyInstaller Bundle (Temp Folder)
+        internal_base = Path(sys._MEIPASS)
+        # 2. Determine the path to the EXE (External / Persistent)
+        external_base = Path(sys.executable).parent
     else:
-        # Running from source
-        base_dir = Path(__file__).resolve().parent
+        # Running from Source
+        internal_base = Path(__file__).resolve().parent
+        external_base = internal_base
 
-    print(f"Base directory: {base_dir}")
+    print(f"Code running in: {internal_base}")
+    print(f"Save data location: {external_base}")
 
-    # Make sure we run from the base dir so relative paths work
-    os.chdir(base_dir)
+    # Set the working directory to internal_base so imports work
+    os.chdir(internal_base)
+
+    # ---- CRITICAL FIX ----
+    # Tell the backend where to save the database file
+    # We set an environment variable that the backend can read
+    os.environ["GAME_SAVE_DIR"] = str(external_base)
 
     # ---- Ensure backend/ and frontend/ are importable ----
-    sys.path.insert(0, str(base_dir / "backend"))
-    sys.path.insert(0, str(base_dir / "frontend"))
+    sys.path.insert(0, str(internal_base / "backend"))
+    sys.path.insert(0, str(internal_base / "frontend"))
 
     # ---- Start backend in a background (daemon) thread ----
     backend_thread = threading.Thread(target=start_backend, daemon=True)
     backend_thread.start()
 
-    # Wait for backend to be ready (or time out)
+    # Wait for backend to be ready
     wait_for_backend(timeout_seconds=10)
 
     # ---- Start Pygame frontend ----
     import frontend.main  # noqa: F401
-
-    # When the Pygame window closes, the process will exit and
-    # the daemon backend thread will be killed automatically.
-
 
 if __name__ == "__main__":
     main()
