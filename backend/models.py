@@ -31,6 +31,7 @@ class Pet(Base):
     color_phenotype = Column(String, nullable=True)  # Visible coat color (e.g., "Brown", "Brown-Orange mix")
     hair_type = Column(String, default="short")  # "short" or "fluffy"
     age_days = Column(Integer, default=0)
+    age_months = Column(Integer, default=0)
     health = Column(Integer, default=100)
     happiness = Column(Integer, default=100)
     hunger = Column(Integer, default=3)

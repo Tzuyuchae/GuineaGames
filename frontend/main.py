@@ -36,6 +36,8 @@ import store_page
 import breeding 
 from settings_popup import SettingsPopup
 import help_page
+from time import inc_month
+from sqlalchemy.orm import Session
 
 # --- IMPORT MINIGAME ---
 try:
@@ -104,6 +106,8 @@ if MinigamePage:
 # --- MAIN LOOP ---
 currentmenu = "title"
 running = True
+time_passed = 0
+inGameTimerStarted = False
 
 while running:
     events = pygame.event.get()
@@ -156,6 +160,10 @@ while running:
         title.title_draw(screen)
 
     elif currentmenu == 'homescreen':
+        # once player enters homescreen, signal ingame time to start if it hasn't already
+        if !inGameTimerStarted:   
+            inGameTimerStarted = True
+        
         if not settings_active:
             new_state = homescreen.homescreen_update(events, CURRENT_USER_ID)
             if new_state:
@@ -213,8 +221,18 @@ while running:
     if settings_active and currentmenu != 'help':
         settings_popup.draw(screen)
 
+    # --- TIME PASSES ---
+    if inGameTimerStarted:
+        secondsPassed += 1
+        if secondsPassed == 300:        
+            secondsPassed = 0
+            inc_month()
+    
     pygame.display.flip()
     clock.tick(FPS)
 
+    
+
 pygame.quit()
+
 sys.exit()

@@ -1,74 +1,120 @@
-# frankly, at this point I'm unsure which of these I actually need, I just don't want to break anything by removing it
-import random
-import json
-from typing import List, Dict, Tuple
-
-import models, schemas
-from pricing import RarityCalculator
-from fastapi import FastAPI
-from routes import users, pets, inventory, transactions, mini_games, leaderboard, genetics, marketplace
-
-import typing
-import APIClient
-from sqlalchemy.orm import Session
-import database
+import sqlite3
 import pygame
-import os
-from minigame.button import Button
-
-import homescreen import pet_dies
+import datetime
+from models import Pet
 
 
-# --- TIME PASSING -------------------------------------------------------------------------------------------------------------------
+sqliteConnection = sqlite3.connect("database.py")
+cursor = sqliteConnection.cursor()
 
-def inc_month():
-    db = database.get_db()
-    pets = (
-        db.query(models.Pet)
-        .filter(
-            models.Pet.owner_id == owner_id,
-            models.Pet.species == "guinea_pig",
-            models.Pet.hunger > 0,
-        )
-        .order_by(models.Pet.hunger.desc(), models.Pet.id.asc())
-        .all()
-    )
-    for pet in pets:
-        # if pig was already at 0 hunger, it starves
-        if pet.hunger == 0:
-            pet_dies(pet.name)
-            
+
+# This logic will probably need to be literally copied into the main doc
+# once its up and functional
+
+###################################################################
+
+
+# create list of gpigs
+# fix aging functionality
+
+
+pygame.init()
+screen = pygame.display.set_mode((128, 128))
+clock = pygame.time.Clock()
+
+
+# pigs are stored as follow in DB:
+
+#0-9: id, owner_id, name, species, color, color_phenotype, hair_type, age_months, health, happiness
+#10-19: hunger, cleanliness, points, genetic_code, speed, endurance, rarity_score, rarity_tier, market_value, for_sale
+#20-21: asking_price, last_updated
+
+def readInGPigs(self):
+    sqliteConnection = sqlite3.connect("database.py")
+    cursor = sqliteConnection.cursor()
+
+    gpigs = {}
+    cursor.execute("SELECT * FROM pets")
+    rows = cursor.fetchall()
+    for row in rows:
+        #newPet doesn't take in datetime as an arg, it instead runs datetime.datetime inside the method
+        gpig = Pet.newPet(row)
+        gpigs[row[0]] = gpig
+
+    return gpigs
+
+
+def inc_month(self, gpigs):
+    for i in gpigs.items():
+        # if gpig was already at 0 hunger, they starve
+        if gpigs[i].get_age_months == 0:
+            # display message
+            gpigs.pop(i)
+
         # gpigs age and get hungrier
-        pet.hunger -= 1
-        pet.age_months += 1
-    
-        # save age as local var
-        age = pet.age_months
-        
+        gpigs[i].inc_age_months()
+        age = gpigs[i].get_age_months()
+
         # Midsommar the old gpigs (sorry for spoilers)
         if age == 60:
-            pet_dies(pet.name)
-    
+            # display message
+            gpigs.pop(i)
+
         # decrease stats in last 3 months
-        elif age >= 57
-            pet.endurance = max(1, pet.endurance - 5)
-            pet.speed = max(1, pet.speed - 4)
-    
-        
+        elif age == 57:
+            gpigs[i].speed_decrease_old_pigs()
+            gpigs[i].endurance_decrease_old_pigs()
+
+        # gpigs grow to full size after 3 months, start at 0 months old
         elif age == 3:
-            # gpigs grow to full size after 3 months, start at 0 months old
-            
-    
-        #increase points as they age (0-60 month lifespan)
+            gpigs[i].set_size_full_grown()
+       
+        #increase score as they age (0-60 month lifespan)
         # pigs gain a total of 179 points across lifetime
         if age >= 57:
-            pet.points += 10
+           gpigs[i].add_to_score(10)
         elif age >= 48:
-            pet.points += 5
+            gpigs[i].add_to_score(5)
         elif age >= 36:
-            pet.points += 3
+            gpigs[i].add_to_score(3)
         elif age >= 12:
-            pet.points += 2
+            gpigs[i].add_to_score(2)
         elif age >= 3:
-            pet.points += 1
-    db.commit()
+            gpigs[i].add_to_score(1)
+    return gpigs
+
+
+def closingUpdate(self, pigs):
+    for i in pigs.items():
+        vals = pigs[i].get_all_info()
+        cursor.execute(f"""
+            UPDATE pets
+            SET name = {vals[2]}, 
+            age_months = {vals[7]}, 
+            hair_type = {vals[6]},
+            health = {vals[8]}, 
+            hunger = {vals[10]}, 
+            points = {vals[12]},
+            speed = {vals[14]}, 
+            endurance = {vals[15]}, 
+            rarity_score = {vals[16]},
+            rarity_tier = {vals[17]},
+            sizeScalar = {vals[8]}, 
+            market_value = {vals[18]},
+            for_sale = {vals[19]},
+            asking_price = {vals[20]},
+            last_updated = {vals[21]},
+            WHERE pets.id = {vals[0]}
+            """
+        )
+    sqliteConnection.commit()
+    sqliteConnection.close()
+    return False
+
+running = True
+while running:
+    timePassed += 1
+    if timePassed == 300:        #300 seconds is 5 minutes
+        timePassed = 0
+        inc_month(gpigs)
+
