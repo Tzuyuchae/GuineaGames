@@ -350,3 +350,4 @@ def auto_feed_user_pets(db: Session, owner_id: int) -> Dict[str, Any]:
         "success": True,
         "message": "All pets fed successfully."
     }
+    

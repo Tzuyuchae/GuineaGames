@@ -5,6 +5,7 @@ from ..import models, schemas
 import json
 import datetime
 from typing import List
+import random
 
 # Add these imports at the top of the file
 from ..genetics import GeneticCode, BreedingEngine
@@ -211,26 +212,41 @@ def feed_pet(pet_id: int, feed_request: schemas.FeedPetRequest, db: Session = De
 @router.post("/decay/{user_id}")
 def process_daily_decay(user_id: int, db: Session = Depends(get_db)):
     """
-    Called by the frontend clock every game day (24 hours in-game).
-    Responsible for:
-    1. Aging pets (Growing up)
-    2. Increasing hunger
-    3. Decreasing health if starving
-    4. Handling death
+    Called by the frontend clock. 
+    Ages pets by Game Days, but handles Hunger by REAL TIME (5 mins).
     """
     pets = db.query(models.Pet).filter(models.Pet.owner_id == user_id).all()
     results = {"dead_pets": [], "starving_pets": [], "aged_pets": 0}
+    
+    # 300 seconds = 5 Minutes
+    SECONDS_PER_HUNGER_POINT = 300 
+    now = datetime.datetime.utcnow()
 
     for pet in pets:
-        # --- 1. AGE THE PET ---
+        # --- 1. AGE THE PET (Still happens every Game Day) ---
         pet.age_days += 1
         results["aged_pets"] += 1
 
-        # --- 2. INCREASE HUNGER ---
-        # Hunger goes from 0 (Full) to 3 (Starving)
-        if pet.hunger < 3:
-            pet.hunger += 1
+        # --- 2. INCREASE HUNGER (REAL TIME CHECK) ---
+        # Ensure last_updated is not None (fallback to now)
+        last_check = pet.last_updated or now
         
+        # Calculate seconds passed since last save/feed/update
+        time_diff = (now - last_check).total_seconds()
+
+        # Calculate how many "5 minute chunks" have passed
+        hunger_increase = int(time_diff // SECONDS_PER_HUNGER_POINT)
+
+        if hunger_increase > 0:
+            # Apply the calculated hunger (capped at 3)
+            # We use min() to ensure we don't go over 3
+            current_hunger = pet.hunger
+            pet.hunger = min(3, current_hunger + hunger_increase)
+            
+            # CRITICAL: Update the timestamp so it doesn't add hunger again immediately
+            # We only update if hunger actually changed or time passed significantly
+            pet.last_updated = now
+
         # --- 3. APPLY PENALTIES ---
         if pet.hunger >= 3:
             # Starving penalties
@@ -247,9 +263,8 @@ def process_daily_decay(user_id: int, db: Session = Depends(get_db)):
 
         # --- 4. CHECK DEATH ---
         if pet.health <= 0:
-            pet.is_dead = True # Mark as dead (if you have this flag) or delete
+            pet.is_dead = True 
             results["dead_pets"].append(pet.name)
-            # db.delete(pet) # Uncomment if you want perma-death deletion immediately
 
     db.commit()
     return results
