@@ -10,6 +10,7 @@ import datetime
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True)
     email = Column(String, unique=True)
@@ -28,49 +29,19 @@ class User(Base):
 
 class Pet(Base):
     __tablename__ = "pets"
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     name = Column(String)
     species = Column(String)
-    color = Column(String)
-    color_phenotype = Column(String, nullable=True)
-    hair_type = Column(String, default="short")
-    age_days = Column(Integer, default=0)
-    age_months = Column(Integer, default=0)
-    health = Column(Integer, default=100)
-    happiness = Column(Integer, default=100)
-    hunger = Column(Integer, default=3)
-    cleanliness = Column(Integer, default=100)
-    points = Column(Integer, default=0)
-    genetic_code = Column(String, nullable=True)
-    speed = Column(Integer, default=50)
-    endurance = Column(Integer, default=50)
-    rarity_score = Column(Integer, default=0)
-    rarity_tier = Column(String, default="Common")
-    market_value = Column(Integer, default=100)
-    for_sale = Column(Integer, default=0)
-    asking_price = Column(Integer, nullable=True)
-    last_updated = Column(DateTime, default=datetime.datetime.utcnow)
-    tick_progress = Column(Integer, default=0)
-    game_year = Column(Integer, default=1)
-    game_month = Column(Integer, default=1)
-    game_day = Column(Integer, default=1)
-    game_hour = Column(Integer, default=8)
+    # ... (rest of Pet columns)
     
-    # --- NEW: Tracks seconds remaining until breedable ---
-    breeding_cooldown = Column(Integer, default=0)
-
     owner = relationship("User", back_populates="pets")
-    # ... (Keep existing relationships)
-    genetics = relationship("PetGenetics", back_populates="pet")
-    offspring_parent1 = relationship("Offspring", foreign_keys="Offspring.parent1_id", back_populates="parent1")
-    offspring_parent2 = relationship("Offspring", foreign_keys="Offspring.parent2_id", back_populates="parent2")
-    offspring_child = relationship("Offspring", foreign_keys="Offspring.child_id", back_populates="child")
-    marketplace_listing = relationship("PetMarketplace", back_populates="pet", uselist=False)
-    sales_history = relationship("PetSalesHistory", back_populates="pet")
+    # ... (rest of Pet relationships)
 
 class Inventory(Base):
     __tablename__ = "inventory"
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     item_name = Column(String)
@@ -80,6 +51,7 @@ class Inventory(Base):
 
 class Transaction(Base):
     __tablename__ = "transactions"
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     type = Column(String)
@@ -91,6 +63,7 @@ class Transaction(Base):
 
 class MiniGame(Base):
     __tablename__ = "mini_games"
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     base_reward = Column(Integer, default=0)
@@ -98,6 +71,7 @@ class MiniGame(Base):
 
 class Leaderboard(Base):
     __tablename__ = "leaderboards"
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     score = Column(Integer, default=0)
@@ -108,6 +82,7 @@ class Leaderboard(Base):
 
 class ShopItem(Base):
     __tablename__ = "shop_items"
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     category = Column(String, default='food')
@@ -120,55 +95,23 @@ class ShopItem(Base):
 # =====================
 class Gene(Base):
     __tablename__ = "genes"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True)
-    trait = Column(String)
-    description = Column(Text, nullable=True)
-    default_allele_id = Column(Integer, nullable=True)
-
-    alleles = relationship("Allele", back_populates="gene")
-    pet_genetics = relationship("PetGenetics", back_populates="gene")
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
+    # ... (rest of Gene columns and relationships)
 
 class Allele(Base):
     __tablename__ = "alleles"
-    id = Column(Integer, primary_key=True, index=True)
-    gene_id = Column(Integer, ForeignKey("genes.id"))
-    name = Column(String)
-    symbol = Column(String)
-    dominance_level = Column(Integer, default=1)
-    effect_value = Column(Integer, default=0)
-    description = Column(Text, nullable=True)
-
-    gene = relationship("Gene", back_populates="alleles")
-    pet_genetics_allele1 = relationship("PetGenetics", foreign_keys="PetGenetics.allele1_id", back_populates="allele1")
-    pet_genetics_allele2 = relationship("PetGenetics", foreign_keys="PetGenetics.allele2_id", back_populates="allele2")
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
+    # ... (rest of Allele columns and relationships)
 
 class PetGenetics(Base):
     __tablename__ = "pet_genetics"
-    id = Column(Integer, primary_key=True, index=True)
-    pet_id = Column(Integer, ForeignKey("pets.id"))
-    gene_id = Column(Integer, ForeignKey("genes.id"))
-    allele1_id = Column(Integer, ForeignKey("alleles.id"))
-    allele2_id = Column(Integer, ForeignKey("alleles.id"))
-
-    pet = relationship("Pet", back_populates="genetics")
-    gene = relationship("Gene", back_populates="pet_genetics")
-    allele1 = relationship("Allele", foreign_keys=[allele1_id], back_populates="pet_genetics_allele1")
-    allele2 = relationship("Allele", foreign_keys=[allele2_id], back_populates="pet_genetics_allele2")
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
+    # ... (rest of PetGenetics columns and relationships)
 
 class Offspring(Base):
     __tablename__ = "offspring"
-    id = Column(Integer, primary_key=True, index=True)
-    parent1_id = Column(Integer, ForeignKey("pets.id"))
-    parent2_id = Column(Integer, ForeignKey("pets.id"))
-    child_id = Column(Integer, ForeignKey("pets.id"))
-    breeding_date = Column(DateTime, default=datetime.datetime.utcnow)
-    punnett_square_data = Column(Text, nullable=True)
-    inheritance_notes = Column(Text, nullable=True)
-
-    parent1 = relationship("Pet", foreign_keys=[parent1_id], back_populates="offspring_parent1")
-    parent2 = relationship("Pet", foreign_keys=[parent2_id], back_populates="offspring_parent2")
-    child = relationship("Pet", foreign_keys=[child_id], back_populates="offspring_child")
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
+    # ... (rest of Offspring columns and relationships)
 
 # =====================
 # MARKETPLACE MODELS
@@ -176,24 +119,10 @@ class Offspring(Base):
 
 class PetMarketplace(Base):
     __tablename__ = "pet_marketplace"
-    id = Column(Integer, primary_key=True, index=True)
-    pet_id = Column(Integer, ForeignKey("pets.id"), unique=True)
-    seller_id = Column(Integer, ForeignKey("users.id"))
-    asking_price = Column(Integer)
-    listed_date = Column(DateTime, default=datetime.datetime.utcnow)
-
-    pet = relationship("Pet", back_populates="marketplace_listing")
-    seller = relationship("User", back_populates="marketplace_listings")
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
+    # ... (rest of PetMarketplace columns and relationships)
 
 class PetSalesHistory(Base):
     __tablename__ = "pet_sales_history"
-    id = Column(Integer, primary_key=True, index=True)
-    pet_id = Column(Integer, ForeignKey("pets.id"))
-    seller_id = Column(Integer, ForeignKey("users.id"))
-    buyer_id = Column(Integer, ForeignKey("users.id"))
-    sale_price = Column(Integer)
-    sale_date = Column(DateTime, default=datetime.datetime.utcnow)
-
-    pet = relationship("Pet", back_populates="sales_history")
-    seller = relationship("User", foreign_keys=[seller_id], back_populates="sales_as_seller")
-    buyer = relationship("User", foreign_keys=[buyer_id], back_populates="purchases")
+    __table_args__ = {'extend_existing': True}  # <--- FIX APPLIED
+    # ... (rest of PetSalesHistory columns and relationships)

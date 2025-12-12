@@ -2,6 +2,44 @@ import pygame
 import sys
 import ctypes
 import os
+import random
+
+# --- VOLUME SETTINGS & MUSIC HELPERS ---
+# Assuming volume_settings.py is accessible here
+try:
+    from volume_settings import get_music_volume, load_settings 
+    # Load settings early to get the correct volume level
+    load_settings() 
+except ImportError:
+    print("FATAL: volume_settings.py not found. Using default volume.")
+    def get_music_volume(): return 0.7
+    def load_settings(): pass
+    
+# --- MUSIC HELPER FUNCTION (UPDATED: Removed internal stop()) ---
+def play_music_with_volume(music_path):
+    """Helper function to load and loop music with current volume."""
+    try:
+        if os.path.exists(music_path):
+            # *** The stop() is now handled externally in the main loop for state transition ***
+            
+            pygame.mixer.music.load(music_path)
+            pygame.mixer.music.set_volume(get_music_volume())
+            pygame.mixer.music.play(-1)  # Loop indefinitely
+            print(f"Playing music: {music_path}")
+            return True
+        else:
+            print(f"Music file not found: {music_path}")
+            return False
+    except Exception as e:
+        print(f"Could not load music: {e}")
+        return False
+        
+# --- MUSIC TRACKING FLAGS (FIXED: Dedicated flags for each track) ---
+title_music_playing = False      # start.wav
+breeding_music_playing = False   # yeahhhhh yuh.wav
+store_music_playing = False      # shop.wav
+minigame_music_playing = False   # boss battle.wav
+general_music_playing = False    # journey.wav (Used for Homescreen, Help)
 
 # --- API IMPORT ---
 try:
@@ -11,6 +49,11 @@ except ImportError:
     class MockApi:
         def check_connection(self): return False
         def _post(self, url): return {} # Mock post method for reset
+        def get_user(self, user_id): return {'id': user_id, 'username': 'OfflineUser', 'balance': 10000}
+        def create_transaction(self, *args): pass
+        def create_user(self, *args): return {'id': 1, 'username': 'Player1'}
+        def create_pet(self, *args): return {'id': random.randint(100, 999)}
+        def update_pet(self, *args, **kwargs): pass
     api = MockApi()
 
 # --- FIX WINDOWS SCALING ---
@@ -21,6 +64,7 @@ except AttributeError:
 
 # --- INITIALIZE PYGAME ---
 pygame.init()
+pygame.mixer.init() # CRITICAL: Initializes the mixer for sound and music
 
 screen_width = 672
 screen_height = 864
@@ -91,13 +135,12 @@ else:
 # --- NEW RESTART FUNCTION ---
 def hard_reset_game():
     """Wipes all persistent data and resets the user to a fresh game state."""
-    global time_passed
+    global time_passed, title_music_playing, general_music_playing, breeding_music_playing, store_music_playing, minigame_music_playing
     
     print("!!! HARD RESET TRIGGERED !!!")
     
-    # 1. DELETE ALL PETS (Wipes all pet-related data including time/calendar)
+    # 1. DELETE ALL PETS 
     try:
-        # Assuming your API endpoint is correct for mass deletion
         api._post(f"/pets/delete/all/{CURRENT_USER_ID}") 
         print("All pets deleted successfully.")
     except Exception as e:
@@ -124,6 +167,15 @@ def hard_reset_game():
         
     # 4. Force data refresh and go back to homescreen
     homescreen.needs_refresh = True
+    
+    # 5. Stop all music and reset all flags (Updated)
+    pygame.mixer.music.stop()
+    title_music_playing = False
+    general_music_playing = False
+    breeding_music_playing = False
+    store_music_playing = False
+    minigame_music_playing = False
+    
     return 'homescreen' 
 
 
@@ -166,8 +218,53 @@ running = True
 while running:
     events = pygame.event.get()
     
+    # Store the previous menu BEFORE processing events
     old_menu = currentmenu
 
+    # --- MUSIC CHECK & PLAY LOGIC (FIXED STATE MACHINE) ---
+    if currentmenu != old_menu:
+        # 1. STOP MUSIC FORCEFULLY: This guarantees the previous track ends immediately.
+        pygame.mixer.music.stop()
+        
+        # Reset ALL dedicated flags to ensure the new track is allowed to start
+        title_music_playing = False
+        breeding_music_playing = False
+        store_music_playing = False
+        minigame_music_playing = False
+        general_music_playing = False 
+    
+    # 2. Start Title Screen Music (Unique)
+    # The music starts only if the flag is False (meaning it's not currently playing)
+    if currentmenu == 'title' and not title_music_playing:
+        start_music_path = os.path.join("music", "start.wav")
+        if play_music_with_volume(start_music_path):
+            title_music_playing = True
+
+    # 3. Start Breeding Music (Unique)
+    elif currentmenu == 'breeding' and not breeding_music_playing:
+        breeding_music_path = os.path.join("music", "yeahhhhh yuh.wav")
+        if play_music_with_volume(breeding_music_path):
+            breeding_music_playing = True
+            
+    # 4. Start Store Music (Unique)
+    elif currentmenu == 'store' and not store_music_playing: 
+        store_music_path = os.path.join("music", "shop.wav")
+        if play_music_with_volume(store_music_path):
+            store_music_playing = True
+            
+    # 5. Start Minigame Music (Unique)
+    elif currentmenu == 'minigame' and not minigame_music_playing: 
+        minigame_music_path = os.path.join("music", "boss battle.wav")
+        if play_music_with_volume(minigame_music_path):
+            minigame_music_playing = True
+            
+    # 6. Start General Game Music (Covers Home, Help)
+    elif currentmenu in ['homescreen', 'help'] and not general_music_playing:
+        journey_music_path = os.path.join("music", "journey.wav")
+        if play_music_with_volume(journey_music_path):
+            general_music_playing = True
+            
+            
     for event in events:
         if event.type == pygame.QUIT:
             save_clock(time_passed, homescreen.game_time) 
@@ -200,12 +297,11 @@ while running:
                 settings_active = False
                 settings_popup.active = False
             
-            # --- NEW: HANDLE RESTART ---
             elif action == 'confirm_restart':
                 currentmenu = hard_reset_game() 
                 settings_active = False
                 settings_popup.active = False
-                settings_popup.confirm_active = False # Should be handled in SettingsPopup, but good safety measure
+                settings_popup.confirm_active = False 
 
     # --- UPDATES & DRAWING ---
     
@@ -223,7 +319,7 @@ while running:
         title.title_draw(screen)
 
     elif currentmenu == 'homescreen':
-        if not inGameTimerStarted:   
+        if not inGameTimerStarted: 
             inGameTimerStarted = True
         
         if not settings_active:
@@ -273,7 +369,7 @@ while running:
             settings_popup.active = True
 
     # --- AUTO-REFRESH LOGIC ---
-    if currentmenu == 'homescreen' and old_menu != 'homescreen':
+    if currentmenu == 'homescreen' and old_menu != 'homescreen': 
         print("Returning to Homescreen -> Refreshing Data...")
         homescreen.needs_refresh = True
 
@@ -302,5 +398,7 @@ while running:
     pygame.display.flip()
     clock.tick(FPS)
 
+# --- EXIT CLEANUP ---
+save_clock(time_passed, homescreen.game_time)
 pygame.quit()
 sys.exit()

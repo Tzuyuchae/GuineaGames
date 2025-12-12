@@ -5,7 +5,7 @@ a = Analysis(
     ['run_game.py'],
     pathex=[],
     binaries=[],
-    datas=[('backend', 'backend'), ('frontend', 'frontend')],
+    datas=[('backend', 'backend'), ('frontend', 'frontend'), ('frontend', 'music')],
     hiddenimports=['uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto', 'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto', 'uvicorn.lifespan', 'uvicorn.lifespan.on', 'sqlalchemy.sql.default_comparator', 'sqlalchemy.ext.declarative'],
     hookspath=[],
     hooksconfig={},
