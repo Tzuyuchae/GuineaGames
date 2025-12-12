@@ -108,6 +108,10 @@ class BreedingPage:
             baby_count = 0
             
             for p in raw_pets:
+                # --- FIX: FILTER DEAD PETS ---
+                if p.get('health', 100) <= 0:
+                    continue
+
                 # Only Adults can breed
                 if p.get('age_days', 0) >= 1: 
                     wrapper = GuineaPigSprite(0, 0, p)

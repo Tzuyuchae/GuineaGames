@@ -3,8 +3,11 @@ import time
 import datetime
 import os
 import random
+import sys
 
 # --- Imports ---
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from guineapig import GuineaPigSprite
 from details_popup import DetailsPopup
 from api_client import api
@@ -28,6 +31,10 @@ static_obstacles = []
 game_time = {
     "year": 1, "month": 1, "day": 1, "hour": 8, "minute": 0
 }
+
+# --- ID LOOKUP ---
+# Stores {name: id} for ALL pets (living and dead) so we can delete them by name
+pet_id_lookup = {}
 
 # --- SPEED SETTING ---
 REAL_SECONDS_PER_GAME_MINUTE = 0.005 
@@ -77,7 +84,6 @@ def homescreen_init(screen_w, screen_h):
     popup_manager = DetailsPopup()
 
     # --- SETUP FEED BUTTON ---
-    # Position it in the sidebar area
     feed_all_btn_rect = pygame.Rect(screen_w - 170, 250, 140, 40)
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -86,6 +92,7 @@ def homescreen_init(screen_w, screen_h):
     try:
         raw_bg = pygame.image.load(bg_path).convert_alpha()
     except FileNotFoundError:
+        print(f"Background not found at {bg_path}, using placeholder.")
         raw_bg = pygame.Surface((800, 600))
         raw_bg.fill((100, 100, 200)) 
 
@@ -108,17 +115,20 @@ def homescreen_init(screen_w, screen_h):
 
     house_data = {}
     for name, (ox, oy, ow, oh) in houses_original.items():
-        house_img = raw_bg.subsurface(pygame.Rect(ox, oy, ow, oh)).copy()
-        sw, sh = int(ow * scale), int(oh * scale)
-        house_img = pygame.transform.scale(house_img, (sw, sh))
-        mask = pygame.mask.from_surface(house_img)
-        glow = make_glow(mask, intensity=22)
-        
-        sx = int(ox * scale) + BG_POS[0]
-        sy = int(oy * scale) + BG_POS[1]
-        
-        rect = pygame.Rect(sx, sy, sw, sh)
-        house_data[name] = {"rect": rect, "img": house_img, "mask": mask, "glow": glow}
+        try:
+            house_img = raw_bg.subsurface(pygame.Rect(ox, oy, ow, oh)).copy()
+            sw, sh = int(ow * scale), int(oh * scale)
+            house_img = pygame.transform.scale(house_img, (sw, sh))
+            mask = pygame.mask.from_surface(house_img)
+            glow = make_glow(mask, intensity=22)
+            
+            sx = int(ox * scale) + BG_POS[0]
+            sy = int(oy * scale) + BG_POS[1]
+            
+            rect = pygame.Rect(sx, sy, sw, sh)
+            house_data[name] = {"rect": rect, "img": house_img, "mask": mask, "glow": glow}
+        except ValueError:
+            print(f"Warning: Could not extract sprite for {name}. Check coordinates.")
 
     # --- DEFINING EXTRA OBSTACLES ---
     obstacles_original = [
@@ -137,7 +147,7 @@ def homescreen_init(screen_w, screen_h):
 
 def refresh_game_state(user_id):
     """Fetches ALL data from API at once."""
-    global visual_pigs, house_data, static_obstacles, cached_user_data, cached_inventory
+    global visual_pigs, house_data, static_obstacles, cached_user_data, cached_inventory, pet_id_lookup
     
     print("Refreshing game state...") 
 
@@ -146,39 +156,52 @@ def refresh_game_state(user_id):
         cached_user_data = api.get_user(user_id)
         cached_inventory = api.get_user_inventory(user_id)
     except Exception as e:
-        pass
+        print(f"API Error fetching user data: {e}")
 
     # 2. Fetch Pets (Visuals)
     try:
         my_pets = api.get_user_pets(user_id)
-    except Exception:
+    except Exception as e:
+        print(f"API Error fetching pets: {e}")
         return
 
+    # --- STEP 2.5: Build ID Lookup & Filter Dead ---
+    pet_id_lookup.clear()
+    
     existing_sprites = {s.data['id']: s for s in visual_pigs}
     new_visual_pigs = []
     
     screen = pygame.display.get_surface()
-    sw, sh = screen.get_size()
+    if screen: sw, sh = screen.get_size()
+    else: sw, sh = 800, 600
 
     pad = 20
     yard_min_x, yard_max_x = pad, sw - 60 - pad 
     yard_min_y, yard_max_y = 300, sh - 60 - pad
     
     for pet_data in my_pets:
-        pid = pet_data['id']
+        # Save ID for lookup (even if dead)
+        p_name = pet_data.get('name')
+        p_id = pet_data.get('id')
+        if p_name:
+            pet_id_lookup[p_name] = p_id
+
+        # SKIP VISUALS IF DEAD
+        if pet_data.get('health', 100) <= 0:
+            continue
+
+        # ... Create Sprite Logic ...
         sprite = None
         needs_new_spot = True
 
-        if pid in existing_sprites:
-            sprite = existing_sprites[pid]
-            sprite.data = pet_data # Update stats
+        if p_id in existing_sprites:
+            sprite = existing_sprites[p_id]
+            sprite.data = pet_data
             
-            # Simple collision re-check
             is_safe = True
             for house_info in house_data.values():
                 if sprite.rect.colliderect(house_info["rect"].inflate(-10, -10)):
-                    is_safe = False
-                    break
+                    is_safe = False; break
             
             if is_safe:
                 needs_new_spot = False 
@@ -187,28 +210,21 @@ def refresh_game_state(user_id):
         if needs_new_spot:
             final_pos = None
             for _ in range(100): 
-                rx = random.randint(yard_min_x, yard_max_x)
-                ry = random.randint(yard_min_y, yard_max_y)
+                rx = random.randint(int(yard_min_x), int(yard_max_x))
+                ry = random.randint(int(yard_min_y), int(yard_max_y))
                 potential_rect = pygame.Rect(rx, ry, 60, 50)
                 collision = False
                 
                 for house_info in house_data.values():
-                    if potential_rect.colliderect(house_info["rect"]):
-                        collision = True
-                        break
+                    if potential_rect.colliderect(house_info["rect"]): collision = True; break
                 if not collision:
                     for obs in static_obstacles:
-                        if potential_rect.colliderect(obs):
-                            collision = True
-                            break
+                        if potential_rect.colliderect(obs): collision = True; break
                 if not collision:
                     for existing_pig in new_visual_pigs:
-                        if potential_rect.colliderect(existing_pig.rect.inflate(10, 10)):
-                            collision = True
-                            break
+                        if potential_rect.colliderect(existing_pig.rect.inflate(10, 10)): collision = True; break
                 if not collision:
-                    final_pos = (rx, ry)
-                    break 
+                    final_pos = (rx, ry); break 
             
             if final_pos is None:
                 safe_x = pad + (len(new_visual_pigs) * 65) % (sw - 100)
@@ -225,24 +241,30 @@ def refresh_game_state(user_id):
     visual_pigs = new_visual_pigs
 
 def homescreen_update(events, user_id):
-    global last_update, game_time, show_popup, selected_pig_stats, needs_refresh, dead_pets_queue
+    global last_update, game_time, show_popup, selected_pig_stats, needs_refresh, dead_pets_queue, pet_id_lookup
 
     # --- 1. HANDLE DEATH QUEUE ---
-    if dead_pets_queue and not show_popup:
+    while dead_pets_queue and not show_popup:
         dead_name = dead_pets_queue.pop(0)
+        
+        # Try to find the image from visual pigs
         img = None
         for p in visual_pigs:
             if p.data['name'] == dead_name:
                 img = p.image
                 break
         
+        # Try to find ID from global lookup
+        pid = pet_id_lookup.get(dead_name)
+
         selected_pig_stats = {
             "Name": dead_name,
             "is_dead": True,
-            "image_surface": img
+            "image_surface": img,
+            "id": pid  # Pass ID to popup stats
         }
         show_popup = True
-        return None
+        break
 
     # --- 2. HANDLE REFRESH ---
     if needs_refresh and not show_popup:
@@ -254,6 +276,22 @@ def homescreen_update(events, user_id):
         for event in events:
             action = popup_manager.handle_event(event)
             if action == "close":
+                
+                # --- NEW: DELETE PET ON CLOSE ---
+                if selected_pig_stats.get('is_dead') and selected_pig_stats.get('id'):
+                    pid_to_delete = selected_pig_stats['id']
+                    print(f"User acknowledged death. Deleting pet {pid_to_delete}...")
+                    try:
+                        # Attempt to call delete_pet on api
+                        if hasattr(api, 'delete_pet'):
+                            api.delete_pet(pid_to_delete)
+                        else:
+                            # Fallback if specific method doesn't exist
+                            api._post(f"/pets/{pid_to_delete}/delete") 
+                        print("Pet deleted successfully.")
+                    except Exception as e:
+                        print(f"Error deleting pet: {e}")
+
                 show_popup = False
                 needs_refresh = True 
         return None
@@ -267,11 +305,9 @@ def homescreen_update(events, user_id):
     while now - last_update >= REAL_SECONDS_PER_GAME_MINUTE:
         last_update += REAL_SECONDS_PER_GAME_MINUTE
         game_time["minute"] += 1
-        
         if game_time["minute"] >= 60:
             game_time["minute"] = 0
             game_time["hour"] += 1
-        
         if game_time["hour"] >= 24:
             game_time["hour"] = 0
             game_time["day"] += 1 
@@ -290,9 +326,7 @@ def homescreen_update(events, user_id):
             result = api.trigger_daily_decay(user_id)
             if result.get("dead_pets"):
                 dead_pets_queue.extend(result['dead_pets'])
-            
             needs_refresh = True
-                
         except Exception as e:
             print(f"Error processing decay: {e}")
 
@@ -301,25 +335,21 @@ def homescreen_update(events, user_id):
     
     for event in events:
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_t:
+            if event.key == pygame.K_t: # Debug Time Skip
                 game_time["day"] += 1
                 game_time["hour"] = 8 
                 needs_refresh = True 
 
         if event.type == pygame.MOUSEBUTTONDOWN:
-            # Check FEED ALL Button
             if feed_all_btn_rect and feed_all_btn_rect.collidepoint(mouse_pos):
                 print("Attempting to feed all pets...")
                 try:
-                    # Using generic post because api_client might not have specific method
                     response = api._post(f"/pets/feed/all/{user_id}")
-                    
                     if isinstance(response, dict) and not response.get('success', True):
                          print(f"Feed Failed: {response.get('message', 'Unknown error')}")
                     else:
                          print(f"Feed Success: {response.get('message', 'Pets fed')}")
-
-                    needs_refresh = True # Refresh to show new hunger stats
+                    needs_refresh = True 
                 except Exception as e:
                     print(f"Feed All Error: {e}")
                 return None
@@ -333,29 +363,27 @@ def homescreen_update(events, user_id):
                     clicked_pig = True
                     break 
             
-            if clicked_pig:
-                return None
+            if clicked_pig: return None
 
             # Check Buildings
             for name, data in house_data.items():
-                rect = data["rect"]
-                if rect.collidepoint(mouse_pos):
-                    return name
+                if data["rect"].collidepoint(mouse_pos): return name
     
     # --- 6. ANIMATION ---
     screen = pygame.display.get_surface()
-    screen_rect = screen.get_rect()
-    
-    for sprite in visual_pigs:
-        if hasattr(sprite, 'update'):
-            sprite.update()
-        sprite.rect.clamp_ip(screen_rect)
+    if screen:
+        screen_rect = screen.get_rect()
+        for sprite in visual_pigs:
+            if hasattr(sprite, 'update'): sprite.update()
+            sprite.rect.clamp_ip(screen_rect)
 
     return None
 
 def homescreen_draw(screen, user_id):
-    screen.fill(BLACK)
-    screen.blit(background, BG_POS)
+    if not background: screen.fill(BLACK)
+    else:
+        screen.fill(BLACK)
+        screen.blit(background, BG_POS)
     
     mouse_pos = pygame.mouse.get_pos()
 
@@ -386,7 +414,6 @@ def homescreen_draw(screen, user_id):
 
     # --- DRAW SIDEBAR ---
     w, h = screen.get_size()
-    # Increased sidebar height to fit button
     pygame.draw.rect(screen, PANEL_GRAY, (w - 180, 20, 160, 280)) 
     
     h_24 = game_time['hour']

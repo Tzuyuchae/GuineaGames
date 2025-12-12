@@ -1,4 +1,15 @@
 import pygame
+import sys
+import os
+
+# --- ADDED: Path fix to import api_client from parent directory ---
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from api_client import api
+except ImportError:
+    print("Warning: api_client not found in game.py")
+    api = None
+
 from .maze import Maze
 from .player import Player
 from .settings import *
@@ -80,6 +91,18 @@ class Game:
     def check_lose(self):
         if self.player.player_pos() == self.enemy.enemy_pos():
             print("You Lose!")
+            
+            # --- ADDED: DEATH LOGIC ---
+            if self.selected_guinea_pig and api:
+                try:
+                    pid = self.selected_guinea_pig.get('id')
+                    print(f"Reporting death for pet ID: {pid}")
+                    # Set health to 0 via API
+                    # We try specific update first, falling back to generic update if needed
+                    api.update_pet(pid, health=0)
+                except Exception as e:
+                    print(f"Error processing pet death in minigame: {e}")
+
             self.running = False
             self.collected_amount = 0 
 

@@ -186,21 +186,53 @@ class GuineaPigSelector:
 
     def _load_pets(self):
         self.pets = []
+        
+        print(f"SELECTOR DEBUG: Inventory has {len(self.inventory_pigs) if self.inventory_pigs else 0} items.")
 
         if self.inventory_pigs and len(self.inventory_pigs) > 0:
             for pig in self.inventory_pigs:
+                # --- SAFE FILTER LOGIC ---
                 
-                # --- FIX: Filter out Babies ---
-                # Only allow pets that are 1 day or older (Adults)
-                if pig.get('age_days', 0) < 1:
+                # 1. Name & ID for debugging
+                name = pig.get('name', 'Unknown')
+                pid = pig.get('id', '?')
+                
+                # 2. Get Health safely
+                try:
+                    health = int(pig.get('health', 100))
+                except:
+                    health = 100 # Default to alive if data is bad
+                    
+                # 3. Get Age safely
+                try:
+                    age_days = int(pig.get('age_days', 0))
+                except:
+                    age_days = 0
+
+                # 4. Check 'is_alive' - Default to TRUE if missing
+                is_alive = pig.get('is_alive', True)
+
+                # --- DEBUG PRINTS (Check console if list is empty!) ---
+                if health <= 0:
+                    print(f"Skipping {name} (ID: {pid}): Health is {health}")
+                    continue
+                
+                if is_alive is False:
+                    print(f"Skipping {name} (ID: {pid}): marked as dead")
+                    continue
+                    
+                if age_days < 1:
+                    print(f"Skipping {name} (ID: {pid}): is a baby ({age_days} days)")
                     continue 
 
-                # --- VITAL: Determine hair type logic BEFORE creating dict ---
+                # --- IF WE REACH HERE, PET IS VALID ---
+                
+                # Determine hair type logic
                 hair_type_val = self._determine_hair_type(pig)
                 
                 pet_dict = {
                     'id': pig.get('id', random.randint(1000,9999)),
-                    'name': pig.get('name', 'Unknown'),
+                    'name': name,
                     'species': pig.get('species', 'Guinea Pig'),
                     'color': pig.get('color_phenotype', pig.get('color', 'Brown')),
                     
@@ -208,7 +240,7 @@ class GuineaPigSelector:
                     'hair_type': hair_type_val,
                     
                     'speed': pig.get('speed', 50),
-                    'health': pig.get('health', 100),
+                    'health': health,
                     
                     # Pass the hair type explicitly to the sprite loader
                     'sprite': self._get_pet_sprite(pig, hair_type_override=hair_type_val)
@@ -297,8 +329,11 @@ class GuineaPigSelector:
         screen.blit(title_text, title_rect)
 
         if not self.pets:
-            no_pets_text = self.pet_font.render("No guinea pigs found!", True, (255, 100, 100))
+            # Added helpful text if filters hid everyone
+            no_pets_text = self.pet_font.render("No eligible guinea pigs found!", True, (255, 100, 100))
+            sub_text = self.info_font.render("(Must be Alive, Adult, and Healthy)", True, (200, 200, 200))
             screen.blit(no_pets_text, no_pets_text.get_rect(center=(self.screen_width // 2, 300)))
+            screen.blit(sub_text, sub_text.get_rect(center=(self.screen_width // 2, 330)))
         else:
             start_index = int(self.scroll_offset)
             end_index = min(len(self.pets), start_index + self.max_visible_pets)
