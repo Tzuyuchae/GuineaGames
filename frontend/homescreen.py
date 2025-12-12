@@ -13,6 +13,8 @@ from api_client import api
 PANEL_GRAY = (235, 235, 235)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
+GREEN = (50, 200, 50)
+HOVER_GREEN = (70, 220, 70)
 
 # --- Globals ---
 font = None
@@ -23,16 +25,12 @@ house_data = {}
 static_obstacles = []
 
 # --- Logic Globals ---
-# Start at 8:00 AM
 game_time = {
     "year": 1, "month": 1, "day": 1, "hour": 8, "minute": 0
 }
 
 # --- SPEED SETTING ---
-# 0.005 = Super Fast (Dev Mode)
-# 0.05  = Playable Fast (1 Game Day = ~1 min 12 sec)
-# 0.1   = Relaxed (1 Game Day = ~2 min 24 sec)
-REAL_SECONDS_PER_GAME_MINUTE = 0.05 
+REAL_SECONDS_PER_GAME_MINUTE = 0.005 
 
 last_update = 0
 
@@ -49,6 +47,9 @@ dead_pets_queue = []
 # --- Data Cache ---
 cached_user_data = None
 cached_inventory = None
+
+# --- UI ELEMENTS ---
+feed_all_btn_rect = None
 
 def make_glow(mask, intensity=22):
     """Soft, translucent Stardew-style glow."""
@@ -67,13 +68,17 @@ def make_glow(mask, intensity=22):
     return glow
 
 def homescreen_init(screen_w, screen_h):
-    global font, sidebar_font, background, BG_POS, house_data, popup_manager, static_obstacles
+    global font, sidebar_font, background, BG_POS, house_data, popup_manager, static_obstacles, feed_all_btn_rect
 
     pygame.font.init()
     font = pygame.font.Font(None, 40)
     sidebar_font = pygame.font.Font(None, 26)
     
     popup_manager = DetailsPopup()
+
+    # --- SETUP FEED BUTTON ---
+    # Position it in the sidebar area
+    feed_all_btn_rect = pygame.Rect(screen_w - 170, 250, 140, 40)
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     bg_path = os.path.join(current_dir, "images", "BG_Home.png")
@@ -115,7 +120,7 @@ def homescreen_init(screen_w, screen_h):
         rect = pygame.Rect(sx, sy, sw, sh)
         house_data[name] = {"rect": rect, "img": house_img, "mask": mask, "glow": glow}
 
-    # --- DEFINING EXTRA OBSTACLES (Trees, Fences) ---
+    # --- DEFINING EXTRA OBSTACLES ---
     obstacles_original = [
         (30, 480, 120, 100),   
         (220, 580, 100, 40),   
@@ -131,10 +136,7 @@ def homescreen_init(screen_w, screen_h):
         static_obstacles.append(pygame.Rect(sx, sy, sw, sh))
 
 def refresh_game_state(user_id):
-    """
-    Fetches ALL data from API at once.
-    Only called when necessary (Startup, Popup Close, Day Change).
-    """
+    """Fetches ALL data from API at once."""
     global visual_pigs, house_data, static_obstacles, cached_user_data, cached_inventory
     
     print("Refreshing game state...") 
@@ -144,7 +146,6 @@ def refresh_game_state(user_id):
         cached_user_data = api.get_user(user_id)
         cached_inventory = api.get_user_inventory(user_id)
     except Exception as e:
-        # print(f"Sidebar update failed: {e}")
         pass
 
     # 2. Fetch Pets (Visuals)
@@ -170,25 +171,14 @@ def refresh_game_state(user_id):
 
         if pid in existing_sprites:
             sprite = existing_sprites[pid]
-            sprite.data = pet_data # Update stats in existing sprite
+            sprite.data = pet_data # Update stats
             
+            # Simple collision re-check
             is_safe = True
             for house_info in house_data.values():
                 if sprite.rect.colliderect(house_info["rect"].inflate(-10, -10)):
                     is_safe = False
                     break
-            
-            if is_safe:
-                for obs in static_obstacles:
-                    if sprite.rect.colliderect(obs):
-                        is_safe = False
-                        break
-
-            if is_safe:
-                for other_pig in new_visual_pigs:
-                    if sprite.rect.colliderect(other_pig.rect):
-                        is_safe = False
-                        break
             
             if is_safe:
                 needs_new_spot = False 
@@ -227,8 +217,6 @@ def refresh_game_state(user_id):
 
             if sprite:
                 sprite.rect.topleft = final_pos
-                if hasattr(sprite, 'x'): sprite.x = final_pos[0]
-                if hasattr(sprite, 'y'): sprite.y = final_pos[1]
                 new_visual_pigs.append(sprite)
             else:
                 new_sprite = GuineaPigSprite(final_pos[0], final_pos[1], pet_data)
@@ -240,11 +228,8 @@ def homescreen_update(events, user_id):
     global last_update, game_time, show_popup, selected_pig_stats, needs_refresh, dead_pets_queue
 
     # --- 1. HANDLE DEATH QUEUE ---
-    # If there are dead pets pending, show popup for the first one
     if dead_pets_queue and not show_popup:
         dead_name = dead_pets_queue.pop(0)
-        
-        # Try to find its sprite to get the image before it vanishes
         img = None
         for p in visual_pigs:
             if p.data['name'] == dead_name:
@@ -305,10 +290,8 @@ def homescreen_update(events, user_id):
             result = api.trigger_daily_decay(user_id)
             if result.get("dead_pets"):
                 dead_pets_queue.extend(result['dead_pets'])
-                print(f"Queueing death popups for: {result['dead_pets']}")
             
-            if not result.get("dead_pets"):
-                needs_refresh = True
+            needs_refresh = True
                 
         except Exception as e:
             print(f"Error processing decay: {e}")
@@ -318,14 +301,30 @@ def homescreen_update(events, user_id):
     
     for event in events:
         if event.type == pygame.KEYDOWN:
-            # === DEBUG: Press 'T' to skip a day (Kept for manual testing) ===
             if event.key == pygame.K_t:
-                print("DEBUG: Skipping Day...")
                 game_time["day"] += 1
                 game_time["hour"] = 8 
                 needs_refresh = True 
 
         if event.type == pygame.MOUSEBUTTONDOWN:
+            # Check FEED ALL Button
+            if feed_all_btn_rect and feed_all_btn_rect.collidepoint(mouse_pos):
+                print("Attempting to feed all pets...")
+                try:
+                    # Using generic post because api_client might not have specific method
+                    response = api._post(f"/pets/feed/all/{user_id}")
+                    
+                    if isinstance(response, dict) and not response.get('success', True):
+                         print(f"Feed Failed: {response.get('message', 'Unknown error')}")
+                    else:
+                         print(f"Feed Success: {response.get('message', 'Pets fed')}")
+
+                    needs_refresh = True # Refresh to show new hunger stats
+                except Exception as e:
+                    print(f"Feed All Error: {e}")
+                return None
+
+            # Check Pigs
             clicked_pig = False
             for sprite in reversed(visual_pigs):
                 if sprite.is_clicked(mouse_pos):
@@ -337,6 +336,7 @@ def homescreen_update(events, user_id):
             if clicked_pig:
                 return None
 
+            # Check Buildings
             for name, data in house_data.items():
                 rect = data["rect"]
                 if rect.collidepoint(mouse_pos):
@@ -359,6 +359,7 @@ def homescreen_draw(screen, user_id):
     
     mouse_pos = pygame.mouse.get_pos()
 
+    # Draw Buildings
     for name, data in house_data.items():
         rect = data["rect"]
         glow = data["glow"]
@@ -378,12 +379,15 @@ def homescreen_draw(screen, user_id):
             screen.blit(shadow_surf, (text_rect.x + 2, text_rect.y + 2))
             screen.blit(text_surf, text_rect)
 
+    # Draw Pigs
     visual_pigs.sort(key=lambda p: p.rect.centery)
     for sprite in visual_pigs:
         sprite.draw(screen)
 
+    # --- DRAW SIDEBAR ---
     w, h = screen.get_size()
-    pygame.draw.rect(screen, PANEL_GRAY, (w - 180, 20, 160, 220))
+    # Increased sidebar height to fit button
+    pygame.draw.rect(screen, PANEL_GRAY, (w - 180, 20, 160, 280)) 
     
     h_24 = game_time['hour']
     m = game_time['minute']
@@ -414,6 +418,18 @@ def homescreen_draw(screen, user_id):
         screen.blit(text_surface, (w - 170, y))
         y += 20
 
+    # --- DRAW AUTOFEED BUTTON ---
+    if feed_all_btn_rect:
+        hover = feed_all_btn_rect.collidepoint(mouse_pos)
+        col = HOVER_GREEN if hover else GREEN
+        pygame.draw.rect(screen, col, feed_all_btn_rect, border_radius=8)
+        pygame.draw.rect(screen, BLACK, feed_all_btn_rect, 2, border_radius=8)
+        
+        btn_txt = sidebar_font.render("AUTOFEED ALL", True, WHITE)
+        txt_rect = btn_txt.get_rect(center=feed_all_btn_rect.center)
+        screen.blit(btn_txt, txt_rect)
+
+    # Draw Popup if active
     if show_popup and popup_manager and selected_pig_stats:
         overlay = pygame.Surface((w, h))
         overlay.set_alpha(128)

@@ -166,33 +166,61 @@ def pick_best_food_for_pet(
     return best_entry
 
 
+def check_can_feed_all(pets: List[models.Pet], food_entries: List[Dict[str, Any]]) -> bool:
+    """
+    Simulates feeding to see if there is enough food for ALL hungry pets.
+    Does not modify database objects.
+    """
+    # Create a local map of inventory ID -> Quantity to simulate consumption
+    sim_inventory = {
+        entry["inventory"].id: entry["inventory"].quantity 
+        for entry in food_entries
+    }
+    
+    # We iterate a copy of hunger needs to avoid modifying the actual objects just in case
+    for pet in pets:
+        sim_hunger = pet.hunger
+        
+        while sim_hunger > 0:
+            # Find best food in simulation inventory
+            best_inv_id = None
+            best_reduction = 0
+            
+            # Replicate pick_best_food logic but using sim_inventory map
+            for entry in food_entries:
+                inv_id = entry["inventory"].id
+                qty = sim_inventory.get(inv_id, 0)
+                
+                if qty <= 0:
+                    continue
+                
+                reduction = entry["effects"].get("hunger", 0)
+                if reduction > best_reduction:
+                    best_reduction = reduction
+                    best_inv_id = inv_id
+
+            # If we couldn't find food for this pet, the check fails
+            if best_inv_id is None:
+                return False
+            
+            # "Consume" the food in simulation
+            sim_inventory[best_inv_id] -= 1
+            sim_hunger -= best_reduction
+            # Note: sim_hunger can go negative (overfed), that's fine, loop breaks.
+
+    return True
+
+
 def auto_feed_user_pets(db: Session, owner_id: int) -> Dict[str, Any]:
     """
     Auto-feed all hungry guinea pigs for a given owner.
 
     Rules:
     - Only pets with species == 'guinea_pig' and hunger > 0 are considered.
+    - NEW RULE: Only proceeds if there is enough food to feed EVERY hungry pet.
     - Pets are fed in order of highest hunger first.
-    - Uses items from the owner's inventory where category == 'food' and
-      effect.hunger > 0.
-    - Stops when all guinea pigs are no longer hungry OR food runs out.
-
-    Returns a summary dict:
-    {
-      "owner_id": ...,
-      "fed_pets": <number of pets whose hunger decreased>,
-      "total_feedings": <number of individual feed actions>,
-      "details": [
-         {
-           "pet_id": ...,
-           "pet_name": ...,
-           "before_hunger": ...,
-           "after_hunger": ...,
-           "feedings_used": ...
-         },
-         ...
-      ]
-    }
+    
+    Returns a summary dict.
     """
     # Load hungry guinea pigs, highest hunger first
     pets = (
@@ -212,6 +240,8 @@ def auto_feed_user_pets(db: Session, owner_id: int) -> Dict[str, Any]:
             "fed_pets": 0,
             "total_feedings": 0,
             "details": [],
+            "success": True,
+            "message": "No hungry pets."
         }
 
     food_entries = get_user_food_inventory(db, owner_id)
@@ -221,8 +251,24 @@ def auto_feed_user_pets(db: Session, owner_id: int) -> Dict[str, Any]:
             "fed_pets": 0,
             "total_feedings": 0,
             "details": [],
+            "success": False,
+            "message": "No food in inventory."
         }
 
+    # --- SIMULATION CHECK ---
+    # Check if we have enough food for EVERYONE before feeding ANYONE
+    if not check_can_feed_all(pets, food_entries):
+        return {
+            "owner_id": owner_id,
+            "fed_pets": 0,
+            "total_feedings": 0,
+            "details": [],
+            "success": False,
+            "message": "Not enough food to feed all hungry pets."
+        }
+
+    # --- EXECUTION ---
+    # If we get here, we know we have enough food. Proceed as normal.
     total_feedings = 0
     details: List[Dict[str, Any]] = []
 
@@ -230,11 +276,13 @@ def auto_feed_user_pets(db: Session, owner_id: int) -> Dict[str, Any]:
         pet_before_hunger = pet.hunger
         feedings_for_this_pet = 0
 
-        # Keep feeding this pet until not hungry or out of suitable food
+        # Keep feeding this pet until not hungry
         while pet.hunger > 0:
             entry = pick_best_food_for_pet(pet, food_entries)
+            # entry should theoretically never be None here due to the check above,
+            # but good to stay safe.
             if not entry:
-                break  # No more usable food
+                break 
 
             inv = entry["inventory"]
             shop_item = entry["item"]
@@ -248,16 +296,14 @@ def auto_feed_user_pets(db: Session, owner_id: int) -> Dict[str, Any]:
             feedings_for_this_pet += 1
 
             if inv.quantity <= 0:
-                # Remove exhausted item from list
+                # Remove exhausted item from list so it's not picked again
                 food_entries = [
                     e for e in food_entries if e["inventory"].id != inv.id
                 ]
 
-            # If there is no food left at all, break outer loop after this pet
             if not food_entries:
                 break
 
-            # If pet is now full (hunger == 0), move on
             if pet.hunger <= 0:
                 break
 
@@ -272,16 +318,19 @@ def auto_feed_user_pets(db: Session, owner_id: int) -> Dict[str, Any]:
                 }
             )
 
-        # If absolutely no food left, we stop processing more pets
-        if not food_entries:
-            break
-
     # Remove any inventory entries with quantity <= 0 from DB
     for entry in food_entries:
         if entry["inventory"].quantity <= 0:
             db.delete(entry["inventory"])
+    
+    # Also check entries that were removed from the local list
+    # Re-querying might be safer, but since we modify the objects in place,
+    # SQLAlchemy tracking should handle the updates on commit. 
+    # The explicit delete above handles the objects remaining in our local list.
+    # To be thorough, we can trust SQLAlchemy to handle the updates to `quantity`.
+    # But strictly deleting 0-qty rows is cleaner.
 
-    # Log a single transaction summarizing auto-feed (optional, amount 0)
+    # Log a single transaction summarizing auto-feed
     if total_feedings > 0:
         transaction = models.Transaction(
             user_id=owner_id,
@@ -298,4 +347,6 @@ def auto_feed_user_pets(db: Session, owner_id: int) -> Dict[str, Any]:
         "fed_pets": len(details),
         "total_feedings": total_feedings,
         "details": details,
+        "success": True,
+        "message": "All pets fed successfully."
     }

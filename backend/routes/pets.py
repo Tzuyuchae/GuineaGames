@@ -211,27 +211,45 @@ def feed_pet(pet_id: int, feed_request: schemas.FeedPetRequest, db: Session = De
 @router.post("/decay/{user_id}")
 def process_daily_decay(user_id: int, db: Session = Depends(get_db)):
     """
-    Called by the frontend clock. 
-    Increases hunger. Decreases health if starving. Handles Death.
+    Called by the frontend clock every game day (24 hours in-game).
+    Responsible for:
+    1. Aging pets (Growing up)
+    2. Increasing hunger
+    3. Decreasing health if starving
+    4. Handling death
     """
     pets = db.query(models.Pet).filter(models.Pet.owner_id == user_id).all()
-    results = {"dead_pets": [], "starving_pets": []}
+    results = {"dead_pets": [], "starving_pets": [], "aged_pets": 0}
 
     for pet in pets:
+        # --- 1. AGE THE PET ---
+        pet.age_days += 1
+        results["aged_pets"] += 1
+
+        # --- 2. INCREASE HUNGER ---
+        # Hunger goes from 0 (Full) to 3 (Starving)
         if pet.hunger < 3:
             pet.hunger += 1
         
-        if pet.hunger == 3:
+        # --- 3. APPLY PENALTIES ---
+        if pet.hunger >= 3:
+            # Starving penalties
             pet.health -= 25 
             pet.happiness -= 20
             results["starving_pets"].append(pet.name)
+        elif pet.hunger == 2:
+            # Hungry penalties
+            pet.happiness -= 5
+        
+        # Cap stats
+        pet.health = max(0, pet.health)
+        pet.happiness = max(0, pet.happiness)
 
+        # --- 4. CHECK DEATH ---
         if pet.health <= 0:
+            pet.is_dead = True # Mark as dead (if you have this flag) or delete
             results["dead_pets"].append(pet.name)
-            db.delete(pet) 
-        else:
-            pet.health = max(0, pet.health)
-            pet.happiness = max(0, pet.happiness)
+            # db.delete(pet) # Uncomment if you want perma-death deletion immediately
 
     db.commit()
     return results
@@ -267,3 +285,60 @@ def tick_cooldowns(user_id: int, seconds: int = 1, db: Session = Depends(get_db)
     
     db.commit()
     return {"message": "Cooldowns updated", "updated_count": len(pets_on_cooldown)}
+@router.post("/feed/all/{user_id}")
+def feed_all_pets(user_id: int, db: Session = Depends(get_db)):
+    """Feeds all hungry pets using available food in inventory."""
+    
+    # 1. Get all hungry pets
+    pets = db.query(models.Pet).filter(
+        models.Pet.owner_id == user_id,
+        models.Pet.hunger > 0
+    ).all()
+    
+    if not pets:
+        return {"message": "No hungry pets!", "fed_count": 0}
+
+    # 2. Get all food items
+    # We filter by 'food' type or just assume items in inventory are usable
+    inventory = db.query(models.Inventory).filter(models.Inventory.user_id == user_id).all()
+    
+    # Convert inventory to a mutable list we can decrement
+    food_stack = []
+    for item in inventory:
+        # Simple logic: assume everything in inventory is food for now, 
+        # or check a specific list if you have non-food items.
+        if item.quantity > 0:
+            food_stack.append(item)
+            
+    if not food_stack:
+        return {"message": "No food in inventory!", "fed_count": 0}
+
+    pets_fed = 0
+    
+    for pet in pets:
+        while pet.hunger > 0 and food_stack:
+            # Get the first available food item
+            current_food = food_stack[0]
+            
+            # Feed Logic
+            pet.hunger -= 1
+            pet.happiness = min(100, pet.happiness + 5)
+            pet.health = min(100, pet.health + 2)
+            
+            # Decrement Inventory
+            current_food.quantity -= 1
+            
+            # If item runs out, remove from stack and delete from DB
+            if current_food.quantity == 0:
+                db.delete(current_food)
+                food_stack.pop(0)
+                
+            pets_fed += 1
+
+    db.commit()
+    
+    return {
+        "message": f"Fed {pets_fed} times!",
+        "fed_count": pets_fed,
+        "remaining_food": sum(i.quantity for i in food_stack)
+    }
