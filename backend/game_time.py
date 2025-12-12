@@ -1,5 +1,6 @@
 import sys
 import os
+from datetime import datetime
 
 # --- SMART IMPORTS ---
 try:
@@ -12,6 +13,10 @@ except ImportError:
     except ImportError:
         print("CRITICAL ERROR: Could not import database connection in game_time.py")
 
+# Constants
+OLD_AGE_THRESHOLD = 48  # 4 Years (Stats halved here)
+DEATH_AGE_THRESHOLD = 60 # 5 Years (Pet dies here)
+
 def load_clock():
     """
     Returns a dictionary with ticks AND calendar time.
@@ -20,7 +25,7 @@ def load_clock():
     try:
         pet = db.query(Pet).first()
         if pet:
-            print(f"Loading Game Time: Year {pet.game_year}, Day {pet.game_day}")
+            # print(f"Loading Game Time: Year {pet.game_year}, Day {pet.game_day}")
             return {
                 "ticks": pet.tick_progress,
                 "year": pet.game_year,
@@ -29,7 +34,6 @@ def load_clock():
                 "hour": pet.game_hour
             }
         else:
-            # Default start time
             return {"ticks": 0, "year": 1, "month": 1, "day": 1, "hour": 8}
     except Exception as e:
         print(f"Error loading clock: {e}")
@@ -43,7 +47,6 @@ def save_clock(current_ticks, game_time_dict):
     """
     db = SessionLocal()
     try:
-        # Update ALL pets with the global time data
         db.query(Pet).update({
             Pet.tick_progress: current_ticks,
             Pet.game_year: game_time_dict['year'],
@@ -61,58 +64,57 @@ def save_clock(current_ticks, game_time_dict):
 
 def inc_month():
     """
-    Called by main.py when ticks reach 300 (5 minutes).
-    Ages pets and RESETS the saved tick progress to 0.
+    Called by main.py when ticks reach limit.
+    Returns: A list of names of pets that died this month.
     """
     print("In-Game Month Passing...")
     
     db = SessionLocal()
+    dead_pet_names = []
     
     try:
         pets = db.query(Pet).all()
         
         for pet in pets:
-            # --- RESET CLOCK ---
-            # The month has rolled over, so progress resets to 0
+            # 1. Reset Tick Progress
             pet.tick_progress = 0
 
-            # 1. Age the pet
+            # 2. Age the pet
             pet.age_months += 1
             pet.age_days += 30 
             
-            # 2. INCREASE HUNGER
+            # --- OLD AGE LOGIC (Halve Stats) ---
+            # We trigger this EXACTLY at month 48 so it only happens once.
+            if pet.age_months == OLD_AGE_THRESHOLD:
+                print(f"{pet.name} has become an elder! Stats are halved.")
+                pet.speed = pet.speed // 2
+                pet.endurance = pet.endurance // 2
+                pet.strength = pet.strength // 2
+                pet.intelligence = pet.intelligence // 2
+            
+            # 3. Hunger Logic
             if pet.hunger < 3:
                 pet.hunger += 1
             
-            # 3. Apply Starvation Penalties
             if pet.hunger >= 3:
                 pet.health -= 20
                 pet.happiness -= 20
             
-            # 4. Old Age Stat Decay
-            if pet.age_months == 57:
-                pet.speed = max(0, pet.speed - 10)
-                pet.endurance = max(0, pet.endurance - 10)
-            
-            # 5. Growth/Score Logic
-            if pet.age_months >= 57:
-                pet.points += 10
-            elif pet.age_months >= 48:
-                pet.points += 5
-            elif pet.age_months >= 36:
-                pet.points += 3
-            elif pet.age_months >= 12:
-                pet.points += 2
-            elif pet.age_months >= 3:
-                pet.points += 1
+            # 4. Growth/Score Logic
+            if pet.age_months >= 57: pet.points += 10
+            elif pet.age_months >= 48: pet.points += 5
+            elif pet.age_months >= 36: pet.points += 3
+            elif pet.age_months >= 12: pet.points += 2
+            elif pet.age_months >= 3: pet.points += 1
 
-            # 6. Death Logic
-            if pet.health <= 0 or pet.age_months >= 60:
+            # --- DEATH LOGIC ---
+            if pet.health <= 0 or pet.age_months >= DEATH_AGE_THRESHOLD:
                 print(f"Pet {pet.name} has passed away.")
+                dead_pet_names.append(pet.name) # Add to list for frontend
                 db.delete(pet)
                 continue 
 
-            # 7. Safety Clamps
+            # 5. Safety Clamps
             pet.health = max(0, min(100, pet.health))
             pet.happiness = max(0, min(100, pet.happiness))
             pet.cleanliness = max(0, min(100, pet.cleanliness))
@@ -120,9 +122,11 @@ def inc_month():
 
         db.commit()
         print("Month update complete. Database saved.")
+        return dead_pet_names
 
     except Exception as e:
         print(f"Error during month update: {e}")
         db.rollback()
+        return []
     finally:
         db.close()

@@ -30,7 +30,6 @@ house_data = {}
 static_obstacles = []
 
 # --- Logic Globals ---
-# This dictionary is what main.py will update when loading the save file
 game_time = {
     "year": 1, 
     "month": 1, 
@@ -373,7 +372,12 @@ def homescreen_update(events, user_id):
 
             # Check Buildings
             for name, data in house_data.items():
-                if data["rect"].collidepoint(mouse_pos): return name
+                if data["rect"].collidepoint(mouse_pos): 
+                    # --- CHANGE: Training building now returns 'help' ---
+                    if name == 'training':
+                        return 'help'
+                    else:
+                        return name
     
     # --- 6. ANIMATION ---
     screen = pygame.display.get_surface()
@@ -452,7 +456,7 @@ def homescreen_draw(screen, user_id, current_ticks=0):
         
         # Draw Time Progress Bar under the Clock (index 4)
         if i == 4:
-            MAX_TICKS = 18000 # Must match TICKS_PER_MONTH in main.py
+            MAX_TICKS = 18000 # Use default production value, main.py overrides for testing
             bar_w = 140
             bar_h = 6
             bar_x = w - 170

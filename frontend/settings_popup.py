@@ -7,7 +7,8 @@ WHITE = (255, 255, 255)
 GRAY = (150, 150, 150)
 RED = (200, 50, 50)
 GREEN = (50, 200, 50)
-GOLD = (255, 215, 0) # Added for Help Button
+GOLD = (255, 215, 0) 
+BLACK = (0, 0, 0) # <--- ADD THIS LINE
 
 class SettingsPopup:
     def __init__(self, screen_width, screen_height):
@@ -15,56 +16,92 @@ class SettingsPopup:
         self.screen_h = screen_height
         self.active = False
         
-        # Increased height slightly to fit the Help button
+        # Panel sizing (increased height for new button)
         self.panel_w = 400
-        self.panel_h = 360 
+        self.panel_h = 420 
         self.panel_x = (screen_width - self.panel_w) // 2
         self.panel_y = (screen_height - self.panel_h) // 2
         
-        # Fake settings state
+        # State
         self.music_on = True
         self.sfx_on = True
+        self.confirm_active = False # NEW: State for the confirmation screen
         
-        # UI Elements
+        # Fonts
+        try:
+            pygame.font.init()
+            self.font = pygame.font.SysFont("Arial", 24, bold=True)
+            self.font_small = pygame.font.SysFont("Arial", 20, bold=True)
+        except:
+            self.font = pygame.font.Font(None, 30)
+            self.font_small = pygame.font.Font(None, 24)
+
+        # UI Element Rects
         self.rect = pygame.Rect(self.panel_x, self.panel_y, self.panel_w, self.panel_h)
         self.close_btn = pygame.Rect(self.panel_x + self.panel_w - 40, self.panel_y + 10, 30, 30)
         
         self.music_btn = pygame.Rect(self.panel_x + 50, self.panel_y + 80, 300, 40)
         self.sfx_btn = pygame.Rect(self.panel_x + 50, self.panel_y + 140, 300, 40)
         
-        # New Help Button
         self.help_btn = pygame.Rect(self.panel_x + 50, self.panel_y + 200, 300, 40)
         
-        self.quit_btn = pygame.Rect(self.panel_x + 50, self.panel_y + 280, 300, 40)
+        # NEW: Restart Game Button
+        self.restart_btn = pygame.Rect(self.panel_x + 50, self.panel_y + 260, 300, 40)
+        
+        self.quit_btn = pygame.Rect(self.panel_x + 50, self.panel_y + 340, 300, 40)
 
-        try:
-            self.font = pygame.font.SysFont("Arial", 24, bold=True)
-        except:
-            self.font = pygame.font.Font(None, 30)
+        # Confirmation Rects (Will be drawn dynamically on top of main panel)
+        self.confirm_message = "ARE YOU SURE? All progress will be LOST."
+        self.btn_confirm_yes = pygame.Rect(0, 0, 100, 40) # Placeholder, positions calculated in draw
+        self.btn_confirm_no = pygame.Rect(0, 0, 100, 40)
+
 
     def toggle(self):
         self.active = not self.active
+        self.confirm_active = False # Reset confirmation state on toggle
 
     def handle_event(self, event):
         if not self.active:
             return None
-            
+        
+        mouse_pos = event.pos if event.type == pygame.MOUSEBUTTONDOWN else None
+
+        # --- CONFIRMATION SCREEN LOGIC ---
+        if self.confirm_active:
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # Check confirmation buttons (Yes/No)
+                if self.btn_confirm_yes.collidepoint(mouse_pos):
+                    # Signal main.py to handle the restart
+                    self.confirm_active = False
+                    self.active = False
+                    return 'confirm_restart'
+                elif self.btn_confirm_no.collidepoint(mouse_pos):
+                    self.confirm_active = False
+                    return 'close' # Revert to normal settings view
+            return None # Consume event, don't process main settings buttons
+
+        # --- MAIN SETTINGS LOGIC ---
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if self.close_btn.collidepoint(event.pos):
+            if self.close_btn.collidepoint(mouse_pos):
                 self.active = False
+                return 'close'
             
-            elif self.music_btn.collidepoint(event.pos):
+            elif self.music_btn.collidepoint(mouse_pos):
                 self.music_on = not self.music_on
-                # Here you would actually toggle mixer music
                 
-            elif self.sfx_btn.collidepoint(event.pos):
+            elif self.sfx_btn.collidepoint(mouse_pos):
                 self.sfx_on = not self.sfx_on
 
-            elif self.help_btn.collidepoint(event.pos):
-                return 'help'
+            elif self.help_btn.collidepoint(mouse_pos):
+                return 'help' # Handled by main.py
+            
+            # NEW: Restart Button Click
+            elif self.restart_btn.collidepoint(mouse_pos):
+                self.confirm_active = True
+                return None # Stay in settings, but switch to confirmation view
                 
-            elif self.quit_btn.collidepoint(event.pos):
-                return 'quit_game'
+            elif self.quit_btn.collidepoint(mouse_pos):
+                return 'quit_game' # Handled by main.py
                 
         return None
 
@@ -106,10 +143,56 @@ class SettingsPopup:
 
         # Help Button
         pygame.draw.rect(screen, GOLD, self.help_btn, border_radius=8)
-        h_txt = self.font.render("Help / How to Play", True, (50, 50, 50)) # Dark text for contrast
+        h_txt = self.font.render("Help / How to Play", True, (50, 50, 50)) 
         screen.blit(h_txt, (self.help_btn.x + 60, self.help_btn.y + 8))
+        
+        # NEW: Restart Game Button
+        pygame.draw.rect(screen, RED, self.restart_btn, border_radius=8)
+        r_txt = self.font.render("RESTART GAME", True, WHITE)
+        screen.blit(r_txt, (self.restart_btn.x + 80, self.restart_btn.y + 8))
 
         # Quit Button
         pygame.draw.rect(screen, GRAY, self.quit_btn, border_radius=8)
         q_txt = self.font.render("Quit to Desktop", True, WHITE)
         screen.blit(q_txt, (self.quit_btn.x + 70, self.quit_btn.y + 8))
+        
+        # --- NEW: DRAW CONFIRMATION SCREEN ---
+        if self.confirm_active:
+            # Draw dark overlay over the settings panel
+            confirm_overlay = pygame.Surface((self.screen_w, self.screen_h), pygame.SRCALPHA)
+            confirm_overlay.fill(OVERLAY_COLOR)
+            screen.blit(confirm_overlay, (0, 0))
+
+            # Confirmation Box
+            box_w, box_h = 350, 180
+            box_x = (self.screen_w - box_w) // 2
+            box_y = (self.screen_h - box_h) // 2
+            box_rect = pygame.Rect(box_x, box_y, box_w, box_h)
+            
+            pygame.draw.rect(screen, WHITE, box_rect, border_radius=15)
+            pygame.draw.rect(screen, RED, box_rect, 4, border_radius=15)
+
+            # Draw text
+            text_surf = self.font.render(self.confirm_message, True, BLACK)
+            text_rect = text_surf.get_rect(center=(box_rect.centerx, box_y + 40))
+            screen.blit(text_surf, text_rect)
+
+            # Define and draw Yes/No buttons
+            btn_w, btn_h = 100, 40
+            
+            # Position the buttons (Yes on left, No on right)
+            self.btn_confirm_yes.topleft = (box_x + 50, box_y + 100)
+            self.btn_confirm_yes.size = (btn_w, btn_h)
+            
+            self.btn_confirm_no.topleft = (box_x + box_w - btn_w - 50, box_y + 100)
+            self.btn_confirm_no.size = (btn_w, btn_h)
+            
+            # Draw the buttons
+            pygame.draw.rect(screen, GREEN, self.btn_confirm_yes, border_radius=8)
+            pygame.draw.rect(screen, RED, self.btn_confirm_no, border_radius=8)
+            
+            yes_txt = self.font.render("YES", True, WHITE)
+            no_txt = self.font.render("NO", True, WHITE)
+            
+            screen.blit(yes_txt, yes_txt.get_rect(center=self.btn_confirm_yes.center))
+            screen.blit(no_txt, no_txt.get_rect(center=self.btn_confirm_no.center))

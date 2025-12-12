@@ -10,6 +10,7 @@ except ImportError:
     print("API Client not found. Running in offline mode (if supported).")
     class MockApi:
         def check_connection(self): return False
+        def _post(self, url): return {} # Mock post method for reset
     api = MockApi()
 
 # --- FIX WINDOWS SCALING ---
@@ -40,11 +41,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # --- IMPORT BACKEND TIME LOGIC ---
 try:
-    # UPDATED: Import the new save/load functions
     from backend.game_time import inc_month, load_clock, save_clock
 except ImportError:
-    # Fallback if backend file isn't found
-    def inc_month(): pass
+    def inc_month(): return []
     def load_clock(): return {"ticks": 0, "year": 1, "month": 1, "day": 1, "hour": 8}
     def save_clock(t, d): pass
 
@@ -89,6 +88,45 @@ if hasattr(api, 'check_connection') and api.check_connection():
 else:
     print("WARNING: Backend is offline.")
 
+# --- NEW RESTART FUNCTION ---
+def hard_reset_game():
+    """Wipes all persistent data and resets the user to a fresh game state."""
+    global time_passed
+    
+    print("!!! HARD RESET TRIGGERED !!!")
+    
+    # 1. DELETE ALL PETS (Wipes all pet-related data including time/calendar)
+    try:
+        # Assuming your API endpoint is correct for mass deletion
+        api._post(f"/pets/delete/all/{CURRENT_USER_ID}") 
+        print("All pets deleted successfully.")
+    except Exception as e:
+        print(f"Error during API mass delete: {e}")
+        
+    # 2. Reset local time variables
+    time_passed = 0
+    homescreen.game_time['year'] = 1
+    homescreen.game_time['month'] = 1
+    homescreen.game_time['day'] = 1
+    homescreen.game_time['hour'] = 8
+    
+    # 3. Create starter pets and coins again
+    try:
+        api.create_transaction(CURRENT_USER_ID, "gift", 5000, "Hard Reset Gift")
+        p1 = api.create_pet(CURRENT_USER_ID, "Starter Alpha", "Abyssinian", "Brown")
+        api.update_pet(p1['id'], age_days=10)
+        p2 = api.create_pet(CURRENT_USER_ID, "Starter Beta", "American", "White")
+        api.update_pet(p2['id'], age_days=10)
+        print("Starter pets and coins re-created.")
+        
+    except Exception as e:
+        print(f"Error recreating starter data: {e}")
+        
+    # 4. Force data refresh and go back to homescreen
+    homescreen.needs_refresh = True
+    return 'homescreen' 
+
+
 # --- PAGE INITIALIZATION ---
 homescreen.homescreen_init(screen_width, screen_height)
 
@@ -106,21 +144,20 @@ minigame_manager = None
 if MinigamePage:
     minigame_manager = MinigamePage(user_id=CURRENT_USER_ID)
 
-# --- TIME SETUP (UPDATED) ---
-# 1. Load the dictionary from DB
+# --- TIME SETUP ---
 clock_data = load_clock()
 
-# 2. Extract ticks
 time_passed = clock_data['ticks']
 
-# 3. Inject Date into Homescreen so it doesn't reset to Year 1
+# Inject Date into Homescreen
 homescreen.game_time['year'] = clock_data['year']
 homescreen.game_time['month'] = clock_data['month']
 homescreen.game_time['day'] = clock_data['day']
 homescreen.game_time['hour'] = clock_data['hour']
 
 inGameTimerStarted = False
-TICKS_PER_MONTH = 18000 # 5 minutes * 60 FPS
+# SETTING FOR TESTING: 5 seconds * 60 FPS = 300 ticks
+TICKS_PER_MONTH = 300 
 
 # --- MAIN LOOP ---
 currentmenu = "title"
@@ -133,7 +170,6 @@ while running:
 
     for event in events:
         if event.type == pygame.QUIT:
-            # UPDATED: Save ticks AND homescreen.game_time
             save_clock(time_passed, homescreen.game_time) 
             running = False
             
@@ -153,7 +189,6 @@ while running:
                 settings_active = False
 
             if action == 'quit_game':
-                # UPDATED: Save ticks AND homescreen.game_time
                 save_clock(time_passed, homescreen.game_time)
                 running = False
             elif action == 'help':
@@ -164,6 +199,13 @@ while running:
             elif action == 'close': 
                 settings_active = False
                 settings_popup.active = False
+            
+            # --- NEW: HANDLE RESTART ---
+            elif action == 'confirm_restart':
+                currentmenu = hard_reset_game() 
+                settings_active = False
+                settings_popup.active = False
+                settings_popup.confirm_active = False # Should be handled in SettingsPopup, but good safety measure
 
     # --- UPDATES & DRAWING ---
     
@@ -174,7 +216,6 @@ while running:
                 settings_active = True
                 settings_popup.active = True
             elif new_state == 'quit':
-                # UPDATED: Save ticks AND homescreen.game_time
                 save_clock(time_passed, homescreen.game_time)
                 running = False
             elif new_state:
@@ -195,7 +236,6 @@ while running:
                     settings_popup.active = True
                 else:
                     currentmenu = new_state
-        # Pass time_passed for the progress bar
         homescreen.homescreen_draw(screen, CURRENT_USER_ID, time_passed)
 
     elif currentmenu == 'store':
@@ -247,7 +287,14 @@ while running:
         
         if time_passed >= TICKS_PER_MONTH: 
             time_passed = 0
-            inc_month()
+            
+            dead_pets = inc_month()
+            
+            if dead_pets:
+                print(f"Main detected deaths: {dead_pets}")
+                homescreen.dead_pets_queue.extend(dead_pets)
+                homescreen.needs_refresh = True
+            
             try:
                 store_page.on_month_pass()
             except: pass
