@@ -12,7 +12,7 @@ else:
     # We are inside 'frontend/main.py', so we go up one level ('..') to get to the root
     ASSET_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
-# Debug print to help you see where it is looking (Optional, can remove later)
+# Debug print to help you see where it is looking
 print(f"DEBUG: Assets are being loaded from: {ASSET_BASE_DIR}")
 try:
     from volume_settings import get_music_volume, load_settings 
@@ -23,7 +23,7 @@ except ImportError:
     def get_music_volume(): return 0.7
     def load_settings(): pass
     
-# --- MUSIC HELPER FUNCTION (UPDATED: Removed internal stop()) ---
+# --- MUSIC HELPER FUNCTION ---
 def play_music_with_volume(music_filename):
     """Helper function to load and loop music with current volume."""
     try:
@@ -43,7 +43,7 @@ def play_music_with_volume(music_filename):
         print(f"Could not load music: {e}")
         return False
         
-# --- MUSIC TRACKING FLAGS (FIXED: Dedicated flags for each track) ---
+# --- MUSIC TRACKING FLAGS ---
 title_music_playing = False      # start.wav
 breeding_music_playing = False   # yeahhhhh yuh.wav
 store_music_playing = False      # shop.wav
@@ -57,7 +57,7 @@ except ImportError:
     print("API Client not found. Running in offline mode (if supported).")
     class MockApi:
         def check_connection(self): return False
-        def _post(self, url): return {} # Mock post method for reset
+        def _post(self, url): return {} 
         def get_user(self, user_id): return {'id': user_id, 'username': 'OfflineUser', 'balance': 10000}
         def create_transaction(self, *args): pass
         def create_user(self, *args): return {'id': 1, 'username': 'Player1'}
@@ -177,7 +177,7 @@ def hard_reset_game():
     # 4. Force data refresh and go back to homescreen
     homescreen.needs_refresh = True
     
-    # 5. Stop all music and reset all flags (Updated)
+    # 5. Stop all music and reset all flags
     pygame.mixer.music.stop()
     title_music_playing = False
     general_music_playing = False
@@ -217,7 +217,6 @@ homescreen.game_time['day'] = clock_data['day']
 homescreen.game_time['hour'] = clock_data['hour']
 
 inGameTimerStarted = False
-# SETTING FOR TESTING: 5 seconds * 60 FPS = 300 ticks
 TICKS_PER_MONTH = 300 
 
 # --- MAIN LOOP ---
@@ -230,50 +229,7 @@ while running:
     # Store the previous menu BEFORE processing events
     old_menu = currentmenu
 
-    # --- MUSIC CHECK & PLAY LOGIC (FIXED STATE MACHINE) ---
-    if currentmenu != old_menu:
-        # 1. STOP MUSIC FORCEFULLY: This guarantees the previous track ends immediately.
-        pygame.mixer.music.stop()
-        
-        # Reset ALL dedicated flags to ensure the new track is allowed to start
-        title_music_playing = False
-        breeding_music_playing = False
-        store_music_playing = False
-        minigame_music_playing = False
-        general_music_playing = False 
-    
-    # 2. Start Title Screen Music (Unique)
-    # The music starts only if the flag is False (meaning it's not currently playing)
-    if currentmenu == 'title' and not title_music_playing:
-        start_music_path = os.path.join("start.wav")
-        if play_music_with_volume(start_music_path):
-            title_music_playing = True
-
-    # 3. Start Breeding Music (Unique)
-    elif currentmenu == 'breeding' and not breeding_music_playing:
-        breeding_music_path = os.path.join("yeahhhhh yuh.wav")
-        if play_music_with_volume(breeding_music_path):
-            breeding_music_playing = True
-            
-    # 4. Start Store Music (Unique)
-    elif currentmenu == 'store' and not store_music_playing: 
-        store_music_path = os.path.join("shop.wav")
-        if play_music_with_volume(store_music_path):
-            store_music_playing = True
-            
-    # 5. Start Minigame Music (Unique)
-    elif currentmenu == 'minigame' and not minigame_music_playing: 
-        minigame_music_path = os.path.join("boss battle.wav")
-        if play_music_with_volume(minigame_music_path):
-            minigame_music_playing = True
-            
-    # 6. Start General Game Music (Covers Home, Help)
-    elif currentmenu in ['homescreen', 'help'] and not general_music_playing:
-        journey_music_path = os.path.join("journey.wav")
-        if play_music_with_volume(journey_music_path):
-            general_music_playing = True
-            
-            
+    # --- EVENTS & KEYBOARD HANDLING ---
     for event in events:
         if event.type == pygame.QUIT:
             save_clock(time_passed, homescreen.game_time) 
@@ -312,7 +268,7 @@ while running:
                 settings_popup.active = False
                 settings_popup.confirm_active = False 
 
-    # --- UPDATES & DRAWING ---
+    # --- UPDATES & DRAWING (Menu Logic) ---
     
     if currentmenu == 'title':
         if not settings_active:
@@ -376,6 +332,46 @@ while running:
             currentmenu = previous_menu
             settings_active = True
             settings_popup.active = True
+
+    # --- MUSIC CHECK & PLAY LOGIC (MOVED HERE) ---
+    # We place this AFTER the updates because 'currentmenu' might have changed above.
+    if currentmenu != old_menu:
+        # 1. STOP MUSIC FORCEFULLY: This guarantees the previous track ends immediately.
+        pygame.mixer.music.stop()
+        
+        # Reset ALL dedicated flags to ensure the new track is allowed to start
+        title_music_playing = False
+        breeding_music_playing = False
+        store_music_playing = False
+        minigame_music_playing = False
+        general_music_playing = False 
+    
+    # 2. Check which music to start based on the NEW currentmenu
+    if currentmenu == 'title' and not title_music_playing:
+        start_music_path = os.path.join("start.wav")
+        if play_music_with_volume(start_music_path):
+            title_music_playing = True
+
+    elif currentmenu == 'breeding' and not breeding_music_playing:
+        breeding_music_path = os.path.join("yeahhhhh yuh.wav")
+        if play_music_with_volume(breeding_music_path):
+            breeding_music_playing = True
+            
+    elif currentmenu == 'store' and not store_music_playing: 
+        store_music_path = os.path.join("shop.wav")
+        if play_music_with_volume(store_music_path):
+            store_music_playing = True
+            
+    elif currentmenu == 'minigame' and not minigame_music_playing: 
+        minigame_music_path = os.path.join("boss battle.wav")
+        if play_music_with_volume(minigame_music_path):
+            minigame_music_playing = True
+            
+    # Covers Homescreen and Help
+    elif currentmenu in ['homescreen', 'help'] and not general_music_playing:
+        journey_music_path = os.path.join("journey.wav")
+        if play_music_with_volume(journey_music_path):
+            general_music_playing = True
 
     # --- AUTO-REFRESH LOGIC ---
     if currentmenu == 'homescreen' and old_menu != 'homescreen': 
