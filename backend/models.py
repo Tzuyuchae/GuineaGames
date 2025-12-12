@@ -51,6 +51,11 @@ class Pet(Base):
     for_sale = Column(Integer, default=0)
     asking_price = Column(Integer, nullable=True)
     last_updated = Column(DateTime, default=datetime.datetime.utcnow)
+    tick_progress = Column(Integer, default=0)
+    game_year = Column(Integer, default=1)
+    game_month = Column(Integer, default=1)
+    game_day = Column(Integer, default=1)
+    game_hour = Column(Integer, default=8)
     
     # --- NEW: Tracks seconds remaining until breedable ---
     breeding_cooldown = Column(Integer, default=0)

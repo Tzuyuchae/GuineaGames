@@ -18,6 +18,8 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 GREEN = (50, 200, 50)
 HOVER_GREEN = (70, 220, 70)
+BAR_BG = (200, 200, 200)   # Grey background for the time bar
+BAR_FILL = (0, 150, 255)   # Blue fill for the time bar
 
 # --- Globals ---
 font = None
@@ -28,12 +30,16 @@ house_data = {}
 static_obstacles = []
 
 # --- Logic Globals ---
+# This dictionary is what main.py will update when loading the save file
 game_time = {
-    "year": 1, "month": 1, "day": 1, "hour": 8, "minute": 0
+    "year": 1, 
+    "month": 1, 
+    "day": 1, 
+    "hour": 8, 
+    "minute": 0
 }
 
 # --- ID LOOKUP ---
-# Stores {name: id} for ALL pets (living and dead) so we can delete them by name
 pet_id_lookup = {}
 
 # --- SPEED SETTING ---
@@ -379,7 +385,7 @@ def homescreen_update(events, user_id):
 
     return None
 
-def homescreen_draw(screen, user_id):
+def homescreen_draw(screen, user_id, current_ticks=0):
     if not background: screen.fill(BLACK)
     else:
         screen.fill(BLACK)
@@ -440,9 +446,27 @@ def homescreen_draw(screen, user_id):
     ]
 
     y = 40
-    for line in sidebar_lines:
+    for i, line in enumerate(sidebar_lines):
         text_surface = sidebar_font.render(line, True, BLACK)
         screen.blit(text_surface, (w - 170, y))
+        
+        # Draw Time Progress Bar under the Clock (index 4)
+        if i == 4:
+            MAX_TICKS = 18000 # Must match TICKS_PER_MONTH in main.py
+            bar_w = 140
+            bar_h = 6
+            bar_x = w - 170
+            bar_y = y + 22
+            
+            fill_pct = min(current_ticks / MAX_TICKS, 1.0)
+            fill_w = int(bar_w * fill_pct)
+            
+            pygame.draw.rect(screen, BAR_BG, (bar_x, bar_y, bar_w, bar_h))
+            if fill_w > 0:
+                pygame.draw.rect(screen, BAR_FILL, (bar_x, bar_y, fill_w, bar_h))
+            
+            y += 10 # Extra spacing for bar
+
         y += 20
 
     # --- DRAW AUTOFEED BUTTON ---

@@ -29,7 +29,6 @@ clock = pygame.time.Clock()
 FPS = 60
 
 # --- IMPORT PAGES ---
-# Ensure these files exist in the same directory
 import homescreen
 import title
 import store_page
@@ -37,14 +36,17 @@ import breeding
 from settings_popup import SettingsPopup
 import help_page
 
-# Add the parent directory to path to find backend modules if needed
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-# Try importing backend logic safely
+
+# --- IMPORT BACKEND TIME LOGIC ---
 try:
-    from backend.game_time import inc_month 
+    # UPDATED: Import the new save/load functions
+    from backend.game_time import inc_month, load_clock, save_clock
 except ImportError:
     # Fallback if backend file isn't found
     def inc_month(): pass
+    def load_clock(): return {"ticks": 0, "year": 1, "month": 1, "day": 1, "hour": 8}
+    def save_clock(t, d): pass
 
 # --- IMPORT MINIGAME ---
 try:
@@ -64,7 +66,6 @@ if hasattr(api, 'check_connection') and api.check_connection():
         CURRENT_USER_ID = user['id']
         print(f"Logged in as {user['username']}")
 
-        # --- TEST: ADD STARTER COINS ---
         current_balance = user.get('balance', 0)
         if current_balance < 5000:
             print(f"Balance low ({current_balance}). Adding 5000 test coins...")
@@ -78,11 +79,7 @@ if hasattr(api, 'check_connection') and api.check_connection():
         try:
             user = api.create_user("Player1", "p1@game.com", "password")
             CURRENT_USER_ID = user['id']
-            
-            print("Adding 5000 test coins to new user...")
             api.create_transaction(CURRENT_USER_ID, "gift", 5000, "Starter Test Coins")
-
-            # Adult Starters
             p1 = api.create_pet(CURRENT_USER_ID, "Starter Alpha", "Abyssinian", "Brown")
             api.update_pet(p1['id'], age_days=10)
             p2 = api.create_pet(CURRENT_USER_ID, "Starter Beta", "American", "White")
@@ -109,20 +106,35 @@ minigame_manager = None
 if MinigamePage:
     minigame_manager = MinigamePage(user_id=CURRENT_USER_ID)
 
+# --- TIME SETUP (UPDATED) ---
+# 1. Load the dictionary from DB
+clock_data = load_clock()
+
+# 2. Extract ticks
+time_passed = clock_data['ticks']
+
+# 3. Inject Date into Homescreen so it doesn't reset to Year 1
+homescreen.game_time['year'] = clock_data['year']
+homescreen.game_time['month'] = clock_data['month']
+homescreen.game_time['day'] = clock_data['day']
+homescreen.game_time['hour'] = clock_data['hour']
+
+inGameTimerStarted = False
+TICKS_PER_MONTH = 18000 # 5 minutes * 60 FPS
+
 # --- MAIN LOOP ---
 currentmenu = "title"
 running = True
-time_passed = 0 # This variable was misnamed 'secondsPassed' in your snippet
-inGameTimerStarted = False
 
 while running:
     events = pygame.event.get()
     
-    # Store old menu to detect transitions
     old_menu = currentmenu
 
     for event in events:
         if event.type == pygame.QUIT:
+            # UPDATED: Save ticks AND homescreen.game_time
+            save_clock(time_passed, homescreen.game_time) 
             running = False
             
         if event.type == pygame.KEYDOWN:
@@ -141,6 +153,8 @@ while running:
                 settings_active = False
 
             if action == 'quit_game':
+                # UPDATED: Save ticks AND homescreen.game_time
+                save_clock(time_passed, homescreen.game_time)
                 running = False
             elif action == 'help':
                 previous_menu = currentmenu 
@@ -160,13 +174,14 @@ while running:
                 settings_active = True
                 settings_popup.active = True
             elif new_state == 'quit':
+                # UPDATED: Save ticks AND homescreen.game_time
+                save_clock(time_passed, homescreen.game_time)
                 running = False
             elif new_state:
                 currentmenu = new_state
         title.title_draw(screen)
 
     elif currentmenu == 'homescreen':
-        # FIXED: Use 'not' instead of '!' (Python Syntax)
         if not inGameTimerStarted:   
             inGameTimerStarted = True
         
@@ -176,13 +191,12 @@ while running:
                 if new_state == 'mini_games':
                     currentmenu = 'minigame'
                 elif new_state == 'home':
-                    # Sometimes 'home' clicks mean settings in legacy code, 
-                    # but here we just open settings just in case
                     settings_active = True
                     settings_popup.active = True
                 else:
                     currentmenu = new_state
-        homescreen.homescreen_draw(screen, CURRENT_USER_ID)
+        # Pass time_passed for the progress bar
+        homescreen.homescreen_draw(screen, CURRENT_USER_ID, time_passed)
 
     elif currentmenu == 'store':
         if not settings_active:
@@ -203,7 +217,6 @@ while running:
             result = minigame_manager.update(events)
             if result == 'homescreen':
                 currentmenu = 'homescreen'
-                # Reset display mode in case minigame changed it
                 screen = pygame.display.set_mode((screen_width, screen_height))
         
         if minigame_manager:
@@ -230,9 +243,9 @@ while running:
 
     # --- TIME PASSES ---
     if inGameTimerStarted:
-        # FIXED: Use 'time_passed' which matches initialization
         time_passed += 1
-        if time_passed >= 18000:  # 5 minutes at 60 FPS (300 seconds * 60)
+        
+        if time_passed >= TICKS_PER_MONTH: 
             time_passed = 0
             inc_month()
             try:

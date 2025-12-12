@@ -12,10 +12,57 @@ except ImportError:
     except ImportError:
         print("CRITICAL ERROR: Could not import database connection in game_time.py")
 
+def load_clock():
+    """
+    Returns a dictionary with ticks AND calendar time.
+    """
+    db = SessionLocal()
+    try:
+        pet = db.query(Pet).first()
+        if pet:
+            print(f"Loading Game Time: Year {pet.game_year}, Day {pet.game_day}")
+            return {
+                "ticks": pet.tick_progress,
+                "year": pet.game_year,
+                "month": pet.game_month,
+                "day": pet.game_day,
+                "hour": pet.game_hour
+            }
+        else:
+            # Default start time
+            return {"ticks": 0, "year": 1, "month": 1, "day": 1, "hour": 8}
+    except Exception as e:
+        print(f"Error loading clock: {e}")
+        return {"ticks": 0, "year": 1, "month": 1, "day": 1, "hour": 8}
+    finally:
+        db.close()
+
+def save_clock(current_ticks, game_time_dict):
+    """
+    Saves ticks AND the visual calendar date.
+    """
+    db = SessionLocal()
+    try:
+        # Update ALL pets with the global time data
+        db.query(Pet).update({
+            Pet.tick_progress: current_ticks,
+            Pet.game_year: game_time_dict['year'],
+            Pet.game_month: game_time_dict['month'],
+            Pet.game_day: game_time_dict['day'],
+            Pet.game_hour: game_time_dict['hour']
+        })
+        db.commit()
+        print("Game time & Calendar saved successfully.")
+    except Exception as e:
+        print(f"Error saving clock: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
 def inc_month():
     """
-    Called by main.py every 5 minutes (300 ticks).
-    Uses SQLAlchemy to load pets, age them, and save changes.
+    Called by main.py when ticks reach 300 (5 minutes).
+    Ages pets and RESETS the saved tick progress to 0.
     """
     print("In-Game Month Passing...")
     
@@ -25,13 +72,13 @@ def inc_month():
         pets = db.query(Pet).all()
         
         for pet in pets:
+            # --- RESET CLOCK ---
+            # The month has rolled over, so progress resets to 0
+            pet.tick_progress = 0
+
             # 1. Age the pet
             pet.age_months += 1
-            
-            # --- FIX: Sync Days with Months ---
-            # Adding 30 days ensures they become "Adults" (age_days >= 1)
-            # automatically when the month changes.
-            pet.age_days += 30
+            pet.age_days += 30 
             
             # 2. INCREASE HUNGER
             if pet.hunger < 3:
