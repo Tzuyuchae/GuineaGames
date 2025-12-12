@@ -5,9 +5,17 @@ from api_client import api
 # Settings
 POPUP_BG = (245, 245, 245)
 BORDER_COLOR = (0, 0, 0)
-TEXT_COLOR = (0, 0, 0)
+TEXT_COLOR = (0, 0, 0) # Default color for stats
 INPUT_BG = (255, 255, 255)
 INPUT_BORDER = (70, 130, 180) 
+
+# --- Rarity Colors (RGB) ---
+RARITY_COLORS = {
+    "Common": (0, 0, 0),        # Black
+    "Uncommon": (255, 105, 180), # Pink
+    "Super Rare": (153, 51, 255), # Purple
+    "Legendary": (255, 215, 0)    # Gold
+}
 
 class DetailsPopup:
     def __init__(self):
@@ -20,15 +28,17 @@ class DetailsPopup:
             self.title_font = pygame.font.Font(None, 32)
             self.small_font = pygame.font.Font(None, 20)
             
-        self.rect = pygame.Rect(86, 232, 500, 400) 
+        # Keep the height at 480 or even increase slightly if the screen supports it.
+        # Assuming screen height is 720+, 480 should be fine.
+        self.rect = pygame.Rect(86, 232, 500, 480) 
         
-        # Button Layout
-        self.button_back = Button(pygame.Rect(350, 550, 100, 50), "BACK")
-        self.button_grow = Button(pygame.Rect(86, 550, 100, 50), "GROW")
-        self.button_feed = Button(pygame.Rect(200, 550, 140, 50), "FEED")
+        # Buttons are positioned relative to the screen, not the popup rect.
+        # Y-coordinates remain at 650 (bottom of the screen)
+        self.button_back = Button(pygame.Rect(380, 650, 100, 50), "BACK")
+        self.button_grow = Button(pygame.Rect(100, 650, 100, 50), "GROW")
+        self.button_feed = Button(pygame.Rect(220, 650, 140, 50), "FEED")
         
-        # Special Button for Death Screen
-        self.button_rip = Button(pygame.Rect(186, 550, 300, 50), "SAY GOODBYE")
+        self.button_rip = Button(pygame.Rect(186, 650, 300, 50), "SAY GOODBYE")
 
         self.rename_rect = pygame.Rect(0, 0, 80, 30)
         
@@ -36,7 +46,6 @@ class DetailsPopup:
         self.current_input = ""
         self.active_pig_stats = None 
         
-        # Inventory tracking
         self.available_food = None
         self.status_message = ""
 
@@ -58,36 +67,30 @@ class DetailsPopup:
 
         # --- DEATH SCREEN LOGIC ---
         if pig_stats.get("is_dead"):
-            # Draw Title
             title = self.title_font.render("R.I.P.", True, (200, 0, 0))
             screen.blit(title, (self.rect.centerx - title.get_width()//2, self.rect.y + 20))
             
-            # Draw Name
             name = pig_stats.get("Name", "Unknown")
             name_surf = self.font.render(f"Here lies {name}", True, TEXT_COLOR)
             screen.blit(name_surf, (self.rect.centerx - name_surf.get_width()//2, self.rect.y + 60))
 
-            # Draw Sad Message
             msg = self.font.render("They have passed away.", True, (100, 100, 100))
             screen.blit(msg, (self.rect.centerx - msg.get_width()//2, self.rect.y + 100))
 
-            # Draw Image (Greyscale logic or just normal)
             if "image_surface" in pig_stats and pig_stats["image_surface"]:
                 img = pig_stats["image_surface"]
                 img = pygame.transform.scale(img, (120, 120))
-                # Optional: Make it look ghostly
                 img.set_alpha(150) 
                 img_rect = img.get_rect(center=(self.rect.centerx, self.rect.y + 200))
                 screen.blit(img, img_rect)
             
-            # Draw ONLY the Goodbye button
             self.button_rip.draw(screen)
             return
         # ---------------------------
 
         # Fetch inventory on first draw if alive
         if self.available_food is None and "raw_data" in pig_stats:
-             self.fetch_food(pig_stats["raw_data"]["owner_id"])
+              self.fetch_food(pig_stats["raw_data"]["owner_id"])
 
         # 2. Name / Rename UI
         name = pig_stats.get("Name", "Unknown")
@@ -120,11 +123,10 @@ class DetailsPopup:
             img_rect = img.get_rect(center=(self.rect.centerx, self.rect.y + 120))
             screen.blit(img, img_rect)
 
-       # 4. Stats
-        # I moved this up slightly (from +200 to +190) to make room for the extra line
-        start_y = self.rect.y + 190
+        # 4. Stats
+        # *** FIX APPLIED: Reduced Y offset from 240 to 200 to move stats up and avoid overlap ***
+        start_y = self.rect.y + 200 
         
-        # --- ADDED "Rarity" TO THIS LIST ---
         stats_to_show = ["Breed", "Coat", "Rarity", "Age", "Hunger", "Health", "Speed"]
         
         if "Health" not in pig_stats and "raw_data" in pig_stats:
@@ -133,29 +135,67 @@ class DetailsPopup:
         for i, key in enumerate(stats_to_show):
             val = pig_stats.get(key, "N/A")
             stat_str = f"{key}: {val}"
-            text_surf = self.font.render(stat_str, True, TEXT_COLOR)
             
-            # I changed the spacing from 30 to 28 so it doesn't run off the bottom
+            # --- COLOR-CODING LOGIC (Rarity) ---
+            color = TEXT_COLOR
+            if key == "Rarity":
+                rarity = str(val).lower()
+                
+                # Special case: Super Rare (Purple text, Green value)
+                if "super rare" in rarity:
+                    color = RARITY_COLORS["Super Rare"] # Purple for "Rarity:" text
+                    text_surf = self.font.render(f"{key}: ", True, color)
+                    screen.blit(text_surf, (self.rect.x + 40, start_y + (i * 28)))
+                    
+                    base_width = text_surf.get_width()
+                    
+                    green_color = (50, 200, 50) # Green for the value
+                    val_surf = self.font.render(str(val), True, green_color)
+                    
+                    screen.blit(val_surf, (self.rect.x + 40 + base_width, start_y + (i * 28)))
+                    
+                    continue 
+                    
+                # Other rarity colors
+                elif "legendary" in rarity:
+                    color = RARITY_COLORS["Legendary"] # Gold
+                elif "uncommon" in rarity:
+                    color = RARITY_COLORS["Uncommon"] # Pink
+                else:
+                    color = RARITY_COLORS.get(str(val), TEXT_COLOR)
+
+            text_surf = self.font.render(stat_str, True, color)
+            
+            # The spacing is 28
             screen.blit(text_surf, (self.rect.x + 40, start_y + (i * 28)))
-            
-        # 5. Buttons
+        
+        # 5. Status Message - *** FIX APPLIED: Reduced Y offset from 450 to 380 to place it above the buttons ***
+        if self.status_message:
+            msg = self.font.render(self.status_message, True, (0, 150, 0))
+            msg_y = self.rect.y + 380  
+            screen.blit(msg, (self.rect.centerx - msg.get_width()//2, msg_y))
+
+        # 6. Buttons - Drawn at Y=650
         self.button_back.draw(screen)
         self.button_grow.draw(screen)
+
+        label_y = self.button_feed.rect.y - 30  # This is Y=620
 
         # Draw Feed Button logic
         if self.available_food:
             item_to_feed = self.available_food[0]
             self.button_feed.text = "FEED" 
             self.button_feed.draw(screen)
+            # Food label is placed 30 pixels above the feed button (at Y=620)
             lbl = self.small_font.render(f"Item: {item_to_feed['item_name']} ({item_to_feed['quantity']})", True, (50, 50, 50))
-            screen.blit(lbl, (self.button_feed.rect.x, self.button_feed.rect.bottom + 5))
+            screen.blit(lbl, (self.button_feed.rect.x, label_y)) 
         else:
+            self.button_feed.text = "FEED" 
+            self.button_feed.draw(screen)
+            # "No Food!" text is now drawn *above* the button at label_y, not inside it.
             lbl = self.small_font.render("No Food!", True, (200, 50, 50))
-            screen.blit(lbl, (self.button_feed.rect.x + 20, self.button_feed.rect.y + 15))
-
-        if self.status_message:
-            msg = self.font.render(self.status_message, True, (0, 150, 0))
-            screen.blit(msg, (self.rect.centerx - msg.get_width()//2, self.rect.bottom - 40))
+            lbl_x = self.button_feed.rect.centerx - lbl.get_width() // 2 
+            screen.blit(lbl, (lbl_x, label_y))
 
     def handle_event(self, event):
         # Handle Death Screen Exit
@@ -178,8 +218,10 @@ class DetailsPopup:
                         self.active_pig_stats["Age"] = "Adult"
                         if "raw_data" in self.active_pig_stats:
                             self.active_pig_stats["raw_data"]["age_days"] = 10
+                        self.status_message = "Grown!"
                     except Exception as e:
                         print(f"Grow failed: {e}")
+                        self.status_message = "Grow failed!"
                 return None
             
             if self.button_feed.is_clicked(event) and self.available_food:
@@ -199,12 +241,12 @@ class DetailsPopup:
                 except Exception as e:
                     self.status_message = "Error!"
                 return None
-        
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if not self.is_renaming and self.rename_rect.collidepoint(event.pos):
-                self.is_renaming = True
-                self.current_input = self.active_pig_stats.get("Name", "")
-                return None
+            
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if not self.is_renaming and self.rename_rect.collidepoint(event.pos):
+                    self.is_renaming = True
+                    self.current_input = self.active_pig_stats.get("Name", "")
+                    return None
 
         if self.is_renaming and event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RETURN:
