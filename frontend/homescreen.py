@@ -42,7 +42,7 @@ game_time = {
 pet_id_lookup = {}
 
 # --- SPEED SETTING ---
-REAL_SECONDS_PER_GAME_MINUTE = 0.005 
+REAL_SECONDS_PER_GAME_MINUTE = 0.00694444
 
 last_update = 0
 

@@ -118,20 +118,15 @@ if hasattr(api, 'check_connection') and api.check_connection():
         CURRENT_USER_ID = user['id']
         print(f"Logged in as {user['username']}")
 
-        current_balance = user.get('balance', 0)
-        if current_balance < 5000:
-            print(f"Balance low ({current_balance}). Adding 5000 test coins...")
-            try:
-                api.create_transaction(CURRENT_USER_ID, "gift", 5000, "Starter Test Coins")
-            except Exception as e:
-                print(f"Could not add coins: {e}")
-
     except:
         print("Creating User 1...")
         try:
             user = api.create_user("Player1", "p1@game.com", "password")
             CURRENT_USER_ID = user['id']
-            api.create_transaction(CURRENT_USER_ID, "gift", 5000, "Starter Test Coins")
+            
+            # --- FIXED: REMOVED THE 5000 COIN STARTER GIFT ---
+            # Coins will now start at 0.
+            
             p1 = api.create_pet(CURRENT_USER_ID, "Starter Alpha", "Abyssinian", "Brown")
             api.update_pet(p1['id'], age_days=10)
             p2 = api.create_pet(CURRENT_USER_ID, "Starter Beta", "American", "White")
@@ -162,14 +157,19 @@ def hard_reset_game():
     homescreen.game_time['day'] = 1
     homescreen.game_time['hour'] = 8
     
-    # 3. Create starter pets and coins again
+    # 3. Create starter pets (No Coins)
     try:
-        api.create_transaction(CURRENT_USER_ID, "gift", 5000, "Hard Reset Gift")
+        # Note: No coin gift here either.
         p1 = api.create_pet(CURRENT_USER_ID, "Starter Alpha", "Abyssinian", "Brown")
         api.update_pet(p1['id'], age_days=10)
         p2 = api.create_pet(CURRENT_USER_ID, "Starter Beta", "American", "White")
         api.update_pet(p2['id'], age_days=10)
-        print("Starter pets and coins re-created.")
+        print("Starter pets re-created.")
+        
+        # --- CRITICAL FIX: FORCE SAVE TIME IMMEDIATELY ---
+        # This writes "Year 1, Day 1" to the database right now.
+        save_clock(0, homescreen.game_time)
+        print("Database time forced to Year 1.")
         
     except Exception as e:
         print(f"Error recreating starter data: {e}")
@@ -217,7 +217,12 @@ homescreen.game_time['day'] = clock_data['day']
 homescreen.game_time['hour'] = clock_data['hour']
 
 inGameTimerStarted = False
-TICKS_PER_MONTH = 300 
+
+# --- TIME CALCULATION ---
+# FPS is 60.
+# 5 minutes * 60 seconds/min = 300 seconds.
+# 300 seconds * 60 frames/sec = 18000 ticks per month.
+TICKS_PER_MONTH = 18000 
 
 # --- MAIN LOOP ---
 currentmenu = "title"
@@ -333,20 +338,19 @@ while running:
             settings_active = True
             settings_popup.active = True
 
-    # --- MUSIC CHECK & PLAY LOGIC (MOVED HERE) ---
-    # We place this AFTER the updates because 'currentmenu' might have changed above.
+    # --- MUSIC CHECK & PLAY LOGIC ---
     if currentmenu != old_menu:
-        # 1. STOP MUSIC FORCEFULLY: This guarantees the previous track ends immediately.
+        # 1. STOP MUSIC FORCEFULLY
         pygame.mixer.music.stop()
         
-        # Reset ALL dedicated flags to ensure the new track is allowed to start
+        # Reset ALL dedicated flags
         title_music_playing = False
         breeding_music_playing = False
         store_music_playing = False
         minigame_music_playing = False
         general_music_playing = False 
     
-    # 2. Check which music to start based on the NEW currentmenu
+    # 2. Check which music to start
     if currentmenu == 'title' and not title_music_playing:
         start_music_path = os.path.join("start.wav")
         if play_music_with_volume(start_music_path):

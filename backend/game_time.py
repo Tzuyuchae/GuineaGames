@@ -26,12 +26,13 @@ def load_clock():
         pet = db.query(Pet).first()
         if pet:
             # print(f"Loading Game Time: Year {pet.game_year}, Day {pet.game_day}")
+            # Safety check: If fields are None, default to 1
             return {
-                "ticks": pet.tick_progress,
-                "year": pet.game_year,
-                "month": pet.game_month,
-                "day": pet.game_day,
-                "hour": pet.game_hour
+                "ticks": pet.tick_progress if pet.tick_progress else 0,
+                "year": pet.game_year if pet.game_year else 1,
+                "month": pet.game_month if pet.game_month else 1,
+                "day": pet.game_day if pet.game_day else 1,
+                "hour": pet.game_hour if pet.game_hour else 8
             }
         else:
             return {"ticks": 0, "year": 1, "month": 1, "day": 1, "hour": 8}
