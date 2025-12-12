@@ -63,22 +63,16 @@ class GuineaPigSprite:
             # Determine sprite prefix (SH = Short Hair, LH = Long Hair)
             prefix = 'SH' if 'Short' in coat_length else 'LH'
 
-            # --- FIX: STABLE VARIANT SELECTION ---
-            # Don't use hash(), it changes every restart. Use int(id).
-            if 'id' in self.data:
-                try:
-                    # Convert ID to int (sum of chars if it's a string, or just int)
-                    pid = self.data['id']
-                    if isinstance(pid, int):
-                        numeric_id = pid
-                    else:
-                        numeric_id = sum(ord(c) for c in str(pid))
-                    
-                    variant = (numeric_id % 9) + 1
-                except:
-                    variant = 1
-            else:
-                variant = random.randint(1, 9)
+            # --- FIX: VARIANT SELECTION BASED ON NAME ---
+            # We use the Name to pick the variant so it looks the same
+            # in the Store (Temporary ID) and Homescreen (Real ID).
+            name = self.data.get('name', 'Unknown')
+            
+            # Create a number from the letters in the name
+            name_seed = sum(ord(c) for c in name)
+            
+            # Use that number to pick a variant (1-9)
+            variant = (name_seed % 9) + 1
             
             variant_str = f"{variant:02d}"
 
@@ -87,7 +81,6 @@ class GuineaPigSprite:
             filename = f"{prefix}_GP_{coat_color}_{variant_str}.png"
             
             # Construct possible paths
-            # Note: SCRIPT_DIR is inside 'frontend', assets are usually in 'frontend/Global Assets'
             paths_to_check = [
                 os.path.join(SCRIPT_DIR, "Global Assets", "Sprites", "Guinea Pigs", folder_name, folder_name, filename),
                 os.path.join(SCRIPT_DIR, "Global Assets", "Sprites", "Guinea Pigs", folder_name, filename),
@@ -130,6 +123,12 @@ class GuineaPigSprite:
         health = self.data.get('health', 100)
         age_val = "Adult" if self.data.get('age_days', 0) >= 1 else "Baby"
         breed_val = self.data.get('species', 'Guinea Pig')
+        
+        # Get Coat Color
+        coat_val = self.data.get('color_phenotype', self.data.get('color', 'Unknown'))
+        
+        # --- NEW: Get Rarity ---
+        rarity_val = self.data.get('rarity_tier', 'Common')
 
         # Check death status
         is_dead = False
@@ -139,6 +138,8 @@ class GuineaPigSprite:
         return {
             "Name": name,
             "Breed": breed_val,
+            "Coat": coat_val,
+            "Rarity": rarity_val,    # <--- ADDED THIS LINE
             "Speed": speed,
             "Endurance": endurance,
             "Hunger": f"{hunger}/3",

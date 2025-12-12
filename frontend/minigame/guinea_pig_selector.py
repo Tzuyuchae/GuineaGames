@@ -190,6 +190,11 @@ class GuineaPigSelector:
         if self.inventory_pigs and len(self.inventory_pigs) > 0:
             for pig in self.inventory_pigs:
                 
+                # --- FIX: Filter out Babies ---
+                # Only allow pets that are 1 day or older (Adults)
+                if pig.get('age_days', 0) < 1:
+                    continue 
+
                 # --- VITAL: Determine hair type logic BEFORE creating dict ---
                 hair_type_val = self._determine_hair_type(pig)
                 

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from routes import users, pets, inventory, transactions, mini_games, leaderboard, genetics, marketplace
-from database import Base, engine, SessionLocal
+from db_connect import Base, engine, SessionLocal
 from genetics import initialize_genetics_system
 
 Base.metadata.create_all(bind=engine)

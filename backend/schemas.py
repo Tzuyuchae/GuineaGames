@@ -1,10 +1,9 @@
 from pydantic import BaseModel
-from typing import Optional, List
-import datetime
+from typing import List, Optional, Dict
+from datetime import datetime
 
-# =====================
-# USER SCHEMAS
-# =====================
+# --- GENERIC SCHEMAS ---
+
 class UserBase(BaseModel):
     username: str
     email: str
@@ -14,51 +13,12 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     id: int
-    balance: int = 0
-    pets: List['Pet'] = []
-
+    balance: int
+    created_at: datetime
+    
     class Config:
         from_attributes = True
 
-# =====================
-# PET SCHEMAS
-# =====================
-class PetBase(BaseModel):
-    name: str
-    species: str
-    color: str
-
-class PetCreate(PetBase):
-    owner_id: int
-
-class Pet(PetBase):
-    id: int
-    owner_id: int
-    age_days: int
-    health: int
-    happiness: int
-    hunger: int
-    cleanliness: int
-    points: int
-    genetic_code: Optional[str] = None
-    speed: int
-    endurance: int
-    last_updated: datetime.datetime
-
-    class Config:
-        from_attributes = True
-
-class PetUpdate(BaseModel):
-    name: Optional[str] = None
-    health: Optional[int] = None
-    happiness: Optional[int] = None
-    hunger: Optional[int] = None
-    cleanliness: Optional[int] = None
-    age_days: Optional[int] = None
-
-# =====================
-# INVENTORY SCHEMAS
-# =====================
 class InventoryBase(BaseModel):
     item_name: str
     quantity: int
@@ -66,206 +26,172 @@ class InventoryBase(BaseModel):
 class InventoryCreate(InventoryBase):
     user_id: int
 
-class Inventory(InventoryBase):
-    id: int
-    user_id: int
-
-    class Config:
-        from_attributes = True
-
 class InventoryUpdate(BaseModel):
     quantity: int
 
-# =====================
-# TRANSACTION SCHEMAS
-# =====================
-class TransactionBase(BaseModel):
-    type: str
-    amount: int
-    description: Optional[str] = None
-
-class TransactionCreate(TransactionBase):
-    user_id: int
-
-class Transaction(TransactionBase):
+class Inventory(InventoryBase):
     id: int
     user_id: int
-    timestamp: datetime.datetime
-
+    
     class Config:
         from_attributes = True
 
-# =====================
-# MINI_GAME SCHEMAS
-# =====================
+# --- PET SCHEMAS ---
+
+class PetBase(BaseModel):
+    name: str
+    species: str
+    color: str
+
+class PetCreate(PetBase):
+    owner_id: int
+    coat_length: Optional[str] = "Short"
+    speed: Optional[int] = None
+    endurance: Optional[int] = None
+    market_value: Optional[int] = None
+
+class PetUpdate(BaseModel):
+    name: Optional[str] = None
+    age_days: Optional[int] = None
+    health: Optional[int] = None
+    happiness: Optional[int] = None
+    hunger: Optional[int] = None
+    cleanliness: Optional[int] = None
+
+class Pet(PetBase):
+    id: int
+    owner_id: int
+    age_days: int
+    age_months: int
+    health: int
+    happiness: int
+    hunger: int
+    cleanliness: int
+    
+    # Stats
+    speed: int
+    endurance: int
+    rarity_score: int
+    rarity_tier: str
+    market_value: int
+    
+    # Visuals
+    color_phenotype: Optional[str]
+    hair_type: Optional[str]
+    
+    genetic_code: Optional[str]
+    
+    # --- NEW FIELD ADDED HERE ---
+    breeding_cooldown: int = 0
+    
+    class Config:
+        from_attributes = True
+
+# --- OTHER SCHEMAS ---
+
+class TransactionCreate(BaseModel):
+    user_id: int
+    type: str
+    amount: int
+    description: str
+
+class Transaction(TransactionCreate):
+    id: int
+    timestamp: datetime
+    
+    class Config:
+        from_attributes = True
+
 class MiniGameBase(BaseModel):
     name: str
     base_reward: int
-    cooldown_sec: Optional[int] = None
+    cooldown_sec: int
 
 class MiniGameCreate(MiniGameBase):
     pass
 
 class MiniGame(MiniGameBase):
     id: int
-
+    
     class Config:
         from_attributes = True
 
-# =====================
-# LEADERBOARD SCHEMAS
-# =====================
-class LeaderboardBase(BaseModel):
+class LeaderboardCreate(BaseModel):
+    user_id: int
     score: int
 
-class LeaderboardCreate(LeaderboardBase):
-    user_id: int
-
-class Leaderboard(LeaderboardBase):
+class Leaderboard(LeaderboardCreate):
     id: int
-    user_id: int
-    rank: Optional[int] = None
-    updated_at: datetime.datetime
-
+    rank: Optional[int]
+    updated_at: datetime
+    
     class Config:
         from_attributes = True
 
-# =====================
-# SHOP_ITEM SCHEMAS
-# =====================
-class ShopItemBase(BaseModel):
-    name: str
-    category: str = 'food'
-    cost: int
-    description: Optional[str] = None
-    effect: Optional[str] = None
+# --- GENETICS SCHEMAS ---
 
-class ShopItemCreate(ShopItemBase):
-    pass
-
-class ShopItem(ShopItemBase):
-    id: int
-
-    class Config:
-        from_attributes = True
-
-# =====================
-# GENETICS SCHEMAS
-# =====================
-class AlleleBase(BaseModel):
-    name: str
-    symbol: str
-    dominance_level: int = 1
-    effect_value: int = 0
-    description: Optional[str] = None
-
-class AlleleCreate(AlleleBase):
-    gene_id: int
-
-class Allele(AlleleBase):
-    id: int
-    gene_id: int
-
-    class Config:
-        from_attributes = True
-
-class GeneBase(BaseModel):
+class GeneCreate(BaseModel):
     name: str
     trait: str
     description: Optional[str] = None
 
-class GeneCreate(GeneBase):
-    pass
-
-class Gene(GeneBase):
+class Gene(GeneCreate):
     id: int
-    default_allele_id: Optional[int] = None
-    alleles: List['Allele'] = []
-
     class Config:
         from_attributes = True
 
-class PetGeneticsBase(BaseModel):
+class AlleleCreate(BaseModel):
+    gene_id: int
+    name: str
+    symbol: str
+    dominance_level: int
+    effect_value: int
+    description: Optional[str] = None
+
+class Allele(AlleleCreate):
+    id: int
+    class Config:
+        from_attributes = True
+
+class PetGeneticsCreate(BaseModel):
+    pet_id: int
     gene_id: int
     allele1_id: int
     allele2_id: int
 
-class PetGeneticsCreate(PetGeneticsBase):
-    pet_id: int
-
-class PetGenetics(PetGeneticsBase):
+class PetGenetics(PetGeneticsCreate):
     id: int
-    pet_id: int
-
-    class Config:
-        from_attributes = True
-
-class OffspringBase(BaseModel):
-    parent1_id: int
-    parent2_id: int
-    child_id: int
-    inheritance_notes: Optional[str] = None
-
-class OffspringCreate(BaseModel):
-    parent1_id: int
-    parent2_id: int
-    child_id: int
-    punnett_square_data: Optional[str] = None
-    inheritance_notes: Optional[str] = None
-
-class Offspring(OffspringBase):
-    id: int
-    breeding_date: datetime.datetime
-    punnett_square_data: Optional[str] = None
-
     class Config:
         from_attributes = True
 
 class BreedingRequest(BaseModel):
     parent1_id: int
     parent2_id: int
-    owner_id: int
     child_name: str
     child_species: Optional[str] = "Guinea Pig"
     child_color: Optional[str] = "Mixed"
+    owner_id: int
 
 class PunnettSquareResult(BaseModel):
-    """Represents a Punnett square calculation result"""
     gene_name: str
     parent1_genotype: str
     parent2_genotype: str
     possible_offspring: List[str]
-    probabilities: dict
+    probabilities: Dict[str, float]
     punnett_square: List[List[str]]
 
+class BreedingOutcome(BaseModel):
+    child_id: int
+    child_name: str
+    child_genetics: str
+    punnett_squares: List[PunnettSquareResult]
+    estimated_stats: Dict[str, int]
+    inheritance_summary: List[str]
+
 class PetStatsSchema(BaseModel):
-    """Pet stats derived from genetics"""
     speed: int
     endurance: int
     genetic_score: int
-
-    class Config:
-        from_attributes = True
-
-class BreedingOutcome(BaseModel):
-    """Complete breeding outcome with inherited genetics"""
-    child_id: int
-    child_name: str
-    child_genetics: Optional[str] = None
-    punnett_squares: List[PunnettSquareResult]
-    estimated_stats: dict
-    inheritance_summary: str
-
-# =====================
-# FOOD SYSTEM SCHEMAS
-# =====================
-class FoodEffect(BaseModel):
-    """Food effect structure"""
-    hunger: Optional[int] = 0
-    health: Optional[int] = 0
-    happiness: Optional[int] = 0
-    cleanliness: Optional[int] = 0
-
+    
 class FeedPetRequest(BaseModel):
-    """Request to feed a pet"""
     item_name: str

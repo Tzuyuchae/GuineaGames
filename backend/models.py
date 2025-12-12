@@ -1,6 +1,11 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
-from database import Base
+try:
+    # Try importing the new filename
+    from backend.db_connect import Base
+except ImportError:
+    from db_connect import Base
+
 import datetime
 
 class User(Base):
@@ -28,8 +33,8 @@ class Pet(Base):
     name = Column(String)
     species = Column(String)
     color = Column(String)
-    color_phenotype = Column(String, nullable=True)  # Visible coat color (e.g., "Brown", "Brown-Orange mix")
-    hair_type = Column(String, default="short")  # "short" or "fluffy"
+    color_phenotype = Column(String, nullable=True)
+    hair_type = Column(String, default="short")
     age_days = Column(Integer, default=0)
     age_months = Column(Integer, default=0)
     health = Column(Integer, default=100)
@@ -43,11 +48,15 @@ class Pet(Base):
     rarity_score = Column(Integer, default=0)
     rarity_tier = Column(String, default="Common")
     market_value = Column(Integer, default=100)
-    for_sale = Column(Integer, default=0)  # Boolean as integer for SQLite
+    for_sale = Column(Integer, default=0)
     asking_price = Column(Integer, nullable=True)
     last_updated = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    # --- NEW: Tracks seconds remaining until breedable ---
+    breeding_cooldown = Column(Integer, default=0)
 
     owner = relationship("User", back_populates="pets")
+    # ... (Keep existing relationships)
     genetics = relationship("PetGenetics", back_populates="pet")
     offspring_parent1 = relationship("Offspring", foreign_keys="Offspring.parent1_id", back_populates="parent1")
     offspring_parent2 = relationship("Offspring", foreign_keys="Offspring.parent2_id", back_populates="parent2")

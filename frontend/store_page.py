@@ -120,26 +120,22 @@ def load_assets(external_bg_path=None):
         food_sprites[k] = load(v, (60, 60))
 
 def store_init(background_path=None):
-    global font_title, font_text, marketplace_listings
+    global font_title, font_text
     pygame.font.init()
     font_title = pygame.font.Font(None, 40)
     font_text = pygame.font.Font(None, 22)
     load_assets(background_path)
-    
-    # --- FORCE CLEAR OLD STOCK ---
-    # This ensures no stale "Shorthair" pigs remain from previous runs
-    marketplace_listings = [] 
     generate_random_store_stock()
 
 def generate_random_store_stock():
-    """Generates random guinea pigs for the store"""
+    """Generates random guinea pigs for the store (Normal Rarity Rates)."""
     global marketplace_listings, last_refresh_time
     
     names = ['Nibbles', 'Cocoa', 'Buttons', 'Poppy', 'Widget', 'Pebble', 'Mango', 'Daisy']
-    colors = ['Brown', 'Black', 'White', 'Orange']
     
-    # --- DEFINE BREEDS ---
-    # Maps Breed Name -> Coat Length
+    # Ensure colors match sprite filenames (No Black to avoid missing sprites)
+    colors = ['Brown', 'White', 'Orange'] 
+    
     breeds = [
         ("American", "Short"),
         ("Abyssinian", "Long"),
@@ -150,30 +146,62 @@ def generate_random_store_stock():
     
     marketplace_listings = []
     
+    # Generate 3 pets
     for i in range(3): 
         chosen_breed, coat = random.choice(breeds)
         
+        # --- NORMAL RARITY LOGIC ---
+        roll = random.randint(1, 100)
+        
+        if roll > 90: # Legendary (10% Chance)
+            speed = random.randint(90, 100)
+            endurance = random.randint(90, 100)
+            price = random.randint(800, 1500)
+        elif roll > 70: # Rare (20% Chance)
+            speed = random.randint(75, 95)
+            endurance = random.randint(75, 95)
+            price = random.randint(400, 800)
+        elif roll > 40: # Uncommon (30% Chance)
+            speed = random.randint(60, 80)
+            endurance = random.randint(60, 80)
+            price = random.randint(200, 450)
+        else: # Common (40% Chance)
+            speed = random.randint(30, 60)
+            endurance = random.randint(30, 60)
+            price = random.randint(100, 250)
+
         fake_data = {
             "id": f"gen_{int(time.time())}_{i}", 
             "name": f"{random.choice(names)}-{random.randint(10,99)}",
             "color": random.choice(colors),
-            "species": chosen_breed, # Critical: Sets breed name
+            "species": chosen_breed, 
             "coat_length": coat,
-            "speed": random.randint(30, 80),
-            "endurance": random.randint(30, 80),
+            "speed": speed,
+            "endurance": endurance,
             "age_days": random.randint(10, 100),
-            "market_value": random.randint(100, 300)
+            "market_value": price
         }
         
         listing = {
             "data": fake_data,
             "sprite": GuineaPigSprite(0, 0, fake_data),
-            "price": fake_data['market_value']
+            "price": price
         }
         marketplace_listings.append(listing)
     
     last_refresh_time = time.time()
     print("Store Restocked with new Guinea Pigs!")
+
+def on_month_pass():
+    """Called by main.py when a game month passes."""
+    # Check if store is empty
+    if len(marketplace_listings) == 0:
+        print("Month passed & Store empty -> Restocking!")
+        generate_random_store_stock()
+    else:
+        # Optional: You could randomly rotate stock anyway
+        # For now, only restock if empty as requested
+        pass
 
 def fetch_user_data(user_id):
     """Updates Balance and Inventory from API"""
@@ -201,6 +229,7 @@ def store_update(events, user_id):
     if user_balance == 0 and not my_pets: 
         fetch_user_data(user_id)
         
+    # Standard time-based refresh (30 mins real time)
     if time.time() - last_refresh_time > REFRESH_INTERVAL:
         generate_random_store_stock()
 
@@ -244,18 +273,14 @@ def store_update(events, user_id):
                                 p_data = listing['data']
                                 api.create_transaction(user_id, "purchase", -listing['price'], f"Adopted {p_data['name']}")
                                 
-                                # --- DEBUG: Print what we are sending ---
-                                breed_to_send = p_data.get('species', 'American')
-                                print(f"Adopting Pet. Name: {p_data['name']}, Breed: {breed_to_send}")
-
+                                print(f"Saving new pet: {p_data['name']}...")
                                 api.create_pet(
-                                    # Positional Arguments (Order Matters!)
-                                    user_id,                                # 1. Owner
-                                    p_data['name'],                         # 2. Name
-                                    breed_to_send,                          # 3. Species (e.g. Abyssinian)
-                                    p_data['color'],                        # 4. Color
+                                    user_id,                                
+                                    p_data['name'],                        
+                                    p_data.get('species', 'American'),      
+                                    p_data['color'],                        
                                     
-                                    # Keyword Arguments
+                                    # Kwargs
                                     coat_length=p_data.get('coat_length', 'Short'), 
                                     speed=p_data['speed'],
                                     endurance=p_data['endurance'],
@@ -341,7 +366,6 @@ def store_draw(screen, user_id):
             p_data = listing['data']
             screen.blit(font_text.render(p_data.get('name', 'Unknown')[:12], True, BLACK), (PIG_START_X + 8, y + 8))
             
-            # --- SHOW BREED ON CARD ---
             breed_txt = p_data.get('species', 'Guinea Pig')
             screen.blit(font_text.render(breed_txt, True, BLACK), (PIG_START_X + 8, y + 25))
             

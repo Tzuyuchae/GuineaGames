@@ -16,7 +16,11 @@ class MinigamePage:
         self.player_inventory = player_inventory 
         
         self.paused = False
-        self.pause_menu = PauseMenu(672, 864) 
+        self.pause_menu = PauseMenu(672, 864)
+        
+        # --- NEW: Loading Flag ---
+        self.loading_assets = False
+        self.font = pygame.font.SysFont('Arial', 30, bold=True)
 
     def initialize_selector(self):
         """Fetches fresh data and creates the selector."""
@@ -69,9 +73,17 @@ class MinigamePage:
         self.final_score_screen = FinalScoreScreen(fruit_count, coin_amount)
 
     def update(self, events):
-        # Initialize selector if needed
+        # --- HANDLE SELECTOR INITIALIZATION (Anti-Freeze Logic) ---
         if self.state == 'selector' and self.guinea_pig_selector is None:
+            if not self.loading_assets:
+                # Frame 1: Set flag and return immediately so Draw() can show "Loading..."
+                self.loading_assets = True
+                return None
+            
+            # Frame 2: Now we do the heavy work
             self.initialize_selector()
+            self.loading_assets = False
+            # Fall through to allow selector to update immediately
 
         # --- PLAYING STATE ---
         if self.state == 'playing':
@@ -90,7 +102,7 @@ class MinigamePage:
                 return None 
 
         # --- SELECTOR STATE ---
-        if self.state == 'selector':
+        if self.state == 'selector' and self.guinea_pig_selector:
             result = self.guinea_pig_selector.update(events)
 
             if result == 'back':
@@ -132,6 +144,13 @@ class MinigamePage:
         return None
 
     def draw(self, screen):
+        # --- DRAW LOADING SCREEN ---
+        if self.state == 'selector' and self.loading_assets:
+            screen.fill((40, 40, 60))
+            txt = self.font.render("Loading Pets...", True, (255, 255, 255))
+            screen.blit(txt, txt.get_rect(center=(336, 432)))
+            return
+
         if self.state == 'selector' and self.guinea_pig_selector:
             self.guinea_pig_selector.draw(screen)
         elif self.state == 'playing' and self.game_instance:
@@ -149,3 +168,4 @@ class MinigamePage:
         self.guinea_pig_selector = None # Setting to None forces reload in update()
         self.final_score_screen = None
         self.paused = False
+        self.loading_assets = False

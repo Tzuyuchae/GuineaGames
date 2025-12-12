@@ -120,9 +120,12 @@ class DetailsPopup:
             img_rect = img.get_rect(center=(self.rect.centerx, self.rect.y + 120))
             screen.blit(img, img_rect)
 
-        # 4. Stats
-        start_y = self.rect.y + 200
-        stats_to_show = ["Age", "Hunger", "Health", "Speed"]
+       # 4. Stats
+        # I moved this up slightly (from +200 to +190) to make room for the extra line
+        start_y = self.rect.y + 190
+        
+        # --- ADDED "Rarity" TO THIS LIST ---
+        stats_to_show = ["Breed", "Coat", "Rarity", "Age", "Hunger", "Health", "Speed"]
         
         if "Health" not in pig_stats and "raw_data" in pig_stats:
             pig_stats["Health"] = f"{pig_stats['raw_data'].get('health', 0)}/100"
@@ -131,8 +134,10 @@ class DetailsPopup:
             val = pig_stats.get(key, "N/A")
             stat_str = f"{key}: {val}"
             text_surf = self.font.render(stat_str, True, TEXT_COLOR)
-            screen.blit(text_surf, (self.rect.x + 40, start_y + (i * 35)))
-
+            
+            # I changed the spacing from 30 to 28 so it doesn't run off the bottom
+            screen.blit(text_surf, (self.rect.x + 40, start_y + (i * 28)))
+            
         # 5. Buttons
         self.button_back.draw(screen)
         self.button_grow.draw(screen)

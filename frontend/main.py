@@ -36,8 +36,15 @@ import store_page
 import breeding 
 from settings_popup import SettingsPopup
 import help_page
-from time import inc_month
-from sqlalchemy.orm import Session
+
+# Add the parent directory to path to find backend modules if needed
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Try importing backend logic safely
+try:
+    from backend.game_time import inc_month 
+except ImportError:
+    # Fallback if backend file isn't found
+    def inc_month(): pass
 
 # --- IMPORT MINIGAME ---
 try:
@@ -72,7 +79,6 @@ if hasattr(api, 'check_connection') and api.check_connection():
             user = api.create_user("Player1", "p1@game.com", "password")
             CURRENT_USER_ID = user['id']
             
-            # --- TEST: ADD STARTER COINS FOR NEW USER ---
             print("Adding 5000 test coins to new user...")
             api.create_transaction(CURRENT_USER_ID, "gift", 5000, "Starter Test Coins")
 
@@ -106,7 +112,7 @@ if MinigamePage:
 # --- MAIN LOOP ---
 currentmenu = "title"
 running = True
-time_passed = 0
+time_passed = 0 # This variable was misnamed 'secondsPassed' in your snippet
 inGameTimerStarted = False
 
 while running:
@@ -160,8 +166,8 @@ while running:
         title.title_draw(screen)
 
     elif currentmenu == 'homescreen':
-        # once player enters homescreen, signal ingame time to start if it hasn't already
-        if !inGameTimerStarted:   
+        # FIXED: Use 'not' instead of '!' (Python Syntax)
+        if not inGameTimerStarted:   
             inGameTimerStarted = True
         
         if not settings_active:
@@ -170,6 +176,8 @@ while running:
                 if new_state == 'mini_games':
                     currentmenu = 'minigame'
                 elif new_state == 'home':
+                    # Sometimes 'home' clicks mean settings in legacy code, 
+                    # but here we just open settings just in case
                     settings_active = True
                     settings_popup.active = True
                 else:
@@ -195,13 +203,13 @@ while running:
             result = minigame_manager.update(events)
             if result == 'homescreen':
                 currentmenu = 'homescreen'
+                # Reset display mode in case minigame changed it
                 screen = pygame.display.set_mode((screen_width, screen_height))
         
         if minigame_manager:
             minigame_manager.draw(screen)
         else:
             screen.fill((0,0,0))
-            # [Fallback drawing omitted for brevity]
 
     elif currentmenu == 'help':
         res = help_page.help_update(events)
@@ -212,7 +220,6 @@ while running:
             settings_popup.active = True
 
     # --- AUTO-REFRESH LOGIC ---
-    # If we just switched TO the homescreen from another menu, force a data refresh.
     if currentmenu == 'homescreen' and old_menu != 'homescreen':
         print("Returning to Homescreen -> Refreshing Data...")
         homescreen.needs_refresh = True
@@ -223,16 +230,17 @@ while running:
 
     # --- TIME PASSES ---
     if inGameTimerStarted:
-        secondsPassed += 1
-        if secondsPassed == 300:        
-            secondsPassed = 0
+        # FIXED: Use 'time_passed' which matches initialization
+        time_passed += 1
+        if time_passed >= 18000:  # 5 minutes at 60 FPS (300 seconds * 60)
+            time_passed = 0
             inc_month()
+            try:
+                store_page.on_month_pass()
+            except: pass
     
     pygame.display.flip()
     clock.tick(FPS)
 
-    
-
 pygame.quit()
-
 sys.exit()

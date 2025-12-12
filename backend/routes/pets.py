@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import get_db
+from db_connect import get_db
 import models, schemas
 import json
 import datetime
@@ -10,14 +10,20 @@ from typing import List
 from genetics import GeneticCode, BreedingEngine
 from pricing import RarityCalculator
 
+# --- THIS LINE IS CRITICAL (It was missing in the broken version) ---
 router = APIRouter(prefix="/pets", tags=["Pets"])
 
 @router.post("/", response_model=schemas.Pet)
 def create_pet(pet: schemas.PetCreate, db: Session = Depends(get_db)):
-    """Create a new pet for a user with auto-generated genetics"""
+    """Create a new pet and FORCE stats/phenotype/rarity to match request"""
+    # 1. Verify User
     user = db.query(models.User).filter(models.User.id == pet.owner_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # 2. Determine Visuals
+    target_hair = "fluffy" if getattr(pet, 'coat_length', 'Short') == "Long" else "short"
+    target_color = pet.color 
 
     db_pet = models.Pet(
         owner_id=pet.owner_id,
@@ -27,34 +33,71 @@ def create_pet(pet: schemas.PetCreate, db: Session = Depends(get_db)):
         health=100,
         happiness=100,
         hunger=0,
-        cleanliness=100
+        cleanliness=100,
+        color_phenotype=target_color, 
+        hair_type=target_hair,
+        rarity_tier="Common", # Default
+        market_value=0
     )
     
-    db_pet.genetic_code = GeneticCode.generate_random_genetic_code(db)
+    # 3. Generate Genetics (Visual Match)
+    best_genetic_code = None
+    for _ in range(50):
+        candidate = GeneticCode.generate_random_genetic_code(db)
+        decoded = GeneticCode.decode(candidate)
+        gene_color = decoded.get('coat_color', 'Mixed')
+        gene_hair = decoded.get('hair_type', 'short')
+        
+        color_ok = (target_color in gene_color) or (target_color == "Orange" and "Mixed" in gene_color)
+        hair_ok = (gene_hair == target_hair)
+        
+        if color_ok and hair_ok:
+            best_genetic_code = candidate
+            break
+            
+    db_pet.genetic_code = best_genetic_code if best_genetic_code else GeneticCode.generate_random_genetic_code(db)
     
     db.add(db_pet)
     db.commit()
     db.refresh(db_pet)
 
-    if db_pet.genetic_code:
-        genes_map = GeneticCode.decode(db_pet.genetic_code)
-        for gene_name, (a1_sym, a2_sym) in genes_map.items():
-            gene = db.query(models.Gene).filter(models.Gene.name == gene_name).first()
-            if gene:
-                a1 = db.query(models.Allele).filter(models.Allele.gene_id == gene.id, models.Allele.symbol == a1_sym).first()
-                a2 = db.query(models.Allele).filter(models.Allele.gene_id == gene.id, models.Allele.symbol == a2_sym).first()
-                if a1 and a2:
-                    pg = models.PetGenetics(
-                        pet_id=db_pet.id,
-                        gene_id=gene.id,
-                        allele1_id=a1.id,
-                        allele2_id=a2.id
-                    )
-                    db.add(pg)
-        db.commit()
-
+    # 4. Run Breeding Engine (Calculates baseline stats)
     BreedingEngine.update_stats_from_genetics(db, db_pet)
-    RarityCalculator.calculate_and_store_valuation(db_pet, db)
+    
+    # Force visuals again just in case
+    db_pet.color_phenotype = target_color
+    db_pet.hair_type = target_hair
+
+    # 5. --- FIX: FORCE STATS AND CALCULATE RARITY MANUALLY ---
+    if pet.speed is not None and pet.endurance is not None:
+        # Apply Stats
+        db_pet.speed = pet.speed
+        db_pet.endurance = pet.endurance
+        
+        # Calculate Average Stat
+        avg_stat = (db_pet.speed + db_pet.endurance) / 2
+        
+        # Force Rarity Tier based on the high stats
+        if avg_stat >= 90:
+            db_pet.rarity_tier = "Legendary"
+            db_pet.rarity_score = 4
+        elif avg_stat >= 75:
+            db_pet.rarity_tier = "Rare"
+            db_pet.rarity_score = 3
+        elif avg_stat >= 60:
+            db_pet.rarity_tier = "Uncommon"
+            db_pet.rarity_score = 2
+        else:
+            db_pet.rarity_tier = "Common"
+            db_pet.rarity_score = 1
+
+        # Apply Price
+        if pet.market_value is not None:
+            db_pet.market_value = pet.market_value
+            
+    else:
+        # If no forced stats (e.g. from Breeding), use standard calculator
+        RarityCalculator.calculate_and_store_valuation(db_pet, db)
 
     db.commit()
     db.refresh(db_pet)
@@ -89,11 +132,9 @@ def update_pet(pet_id: int, pet_update: schemas.PetUpdate, db: Session = Depends
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
 
-    # --- FIX: Explicitly handle the name update ---
     if pet_update.name is not None:
         pet.name = pet_update.name
 
-    # Handle other stats
     if pet_update.health is not None:
         pet.health = max(0, min(100, pet_update.health))
     if pet_update.happiness is not None:
@@ -103,7 +144,6 @@ def update_pet(pet_id: int, pet_update: schemas.PetUpdate, db: Session = Depends
     if pet_update.cleanliness is not None:
         pet.cleanliness = max(0, min(100, pet_update.cleanliness))
     
-    # Handle age (for the GROW button)
     if pet_update.age_days is not None:
         pet.age_days = pet_update.age_days
 
@@ -120,7 +160,6 @@ def feed_pet(pet_id: int, feed_request: schemas.FeedPetRequest, db: Session = De
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
 
-    # Check inventory
     inventory_item = db.query(models.Inventory).filter(
         models.Inventory.user_id == pet.owner_id,
         models.Inventory.item_name == feed_request.item_name
@@ -134,7 +173,6 @@ def feed_pet(pet_id: int, feed_request: schemas.FeedPetRequest, db: Session = De
     ).first()
 
     if not shop_item:
-        # Fallback if item isn't in shop database but exists in inventory
         effects = {"hunger": 1, "happiness": 5}
     else:
         try:
@@ -142,12 +180,9 @@ def feed_pet(pet_id: int, feed_request: schemas.FeedPetRequest, db: Session = De
         except json.JSONDecodeError:
             effects = {}
 
-    # Apply effects
-    # Hunger: Reduce value (min 0)
     if 'hunger' in effects:
         pet.hunger = max(0, pet.hunger - effects['hunger'])
     
-    # Health/Happiness: Increase value (max 100)
     if 'health' in effects:
         pet.health = min(100, max(0, pet.health + effects['health']))
     if 'happiness' in effects:
@@ -157,12 +192,10 @@ def feed_pet(pet_id: int, feed_request: schemas.FeedPetRequest, db: Session = De
 
     pet.last_updated = datetime.datetime.utcnow()
 
-    # Decrease inventory
     inventory_item.quantity -= 1
     if inventory_item.quantity == 0:
         db.delete(inventory_item)
 
-    # Log transaction
     transaction = models.Transaction(
         user_id=pet.owner_id,
         type="pet_feed",
@@ -185,24 +218,18 @@ def process_daily_decay(user_id: int, db: Session = Depends(get_db)):
     results = {"dead_pets": [], "starving_pets": []}
 
     for pet in pets:
-        # 1. Increase Hunger
-        # If not already at max hunger (3), they get hungrier
         if pet.hunger < 3:
             pet.hunger += 1
         
-        # 2. Apply Starvation Damage
-        # If they were already at max hunger (or just reached it), they take damage
         if pet.hunger == 3:
-            pet.health -= 25  # dies in 4 days of starvation
+            pet.health -= 25 
             pet.happiness -= 20
             results["starving_pets"].append(pet.name)
 
-        # 3. Check for Death
         if pet.health <= 0:
             results["dead_pets"].append(pet.name)
-            db.delete(pet) # Bye bye birdie
+            db.delete(pet) 
         else:
-            # Clamp values
             pet.health = max(0, pet.health)
             pet.happiness = max(0, pet.happiness)
 
@@ -219,3 +246,24 @@ def delete_pet(pet_id: int, db: Session = Depends(get_db)):
     db.delete(pet)
     db.commit()
     return {"message": "Pet deleted successfully"}
+@router.post("/cooldowns/tick/{user_id}")
+def tick_cooldowns(user_id: int, seconds: int = 1, db: Session = Depends(get_db)):
+    """
+    Called by the frontend game loop to decrease breeding cooldowns.
+    Only affects pets that currently have a cooldown > 0.
+    """
+    # Get pets with active cooldowns
+    pets_on_cooldown = db.query(models.Pet).filter(
+        models.Pet.owner_id == user_id, 
+        models.Pet.breeding_cooldown > 0
+    ).all()
+    
+    if not pets_on_cooldown:
+        return {"message": "No updates needed"}
+
+    for pet in pets_on_cooldown:
+        # Decrease cooldown, stop at 0
+        pet.breeding_cooldown = max(0, pet.breeding_cooldown - seconds)
+    
+    db.commit()
+    return {"message": "Cooldowns updated", "updated_count": len(pets_on_cooldown)}
