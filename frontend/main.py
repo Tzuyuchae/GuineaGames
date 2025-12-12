@@ -4,8 +4,16 @@ import ctypes
 import os
 import random
 
-# --- VOLUME SETTINGS & MUSIC HELPERS ---
-# Assuming volume_settings.py is accessible here
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # 1. EXE MODE: The temp folder where PyInstaller extracts files
+    ASSET_BASE_DIR = sys._MEIPASS
+else:
+    # 2. SCRIPT MODE: The project root folder
+    # We are inside 'frontend/main.py', so we go up one level ('..') to get to the root
+    ASSET_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+# Debug print to help you see where it is looking (Optional, can remove later)
+print(f"DEBUG: Assets are being loaded from: {ASSET_BASE_DIR}")
 try:
     from volume_settings import get_music_volume, load_settings 
     # Load settings early to get the correct volume level
@@ -16,19 +24,20 @@ except ImportError:
     def load_settings(): pass
     
 # --- MUSIC HELPER FUNCTION (UPDATED: Removed internal stop()) ---
-def play_music_with_volume(music_path):
+def play_music_with_volume(music_filename):
     """Helper function to load and loop music with current volume."""
     try:
-        if os.path.exists(music_path):
-            # *** The stop() is now handled externally in the main loop for state transition ***
-            
-            pygame.mixer.music.load(music_path)
+        # Construct the full path using the global ASSET_BASE_DIR
+        music_full_path = os.path.join(ASSET_BASE_DIR, "music", music_filename)
+        
+        if os.path.exists(music_full_path):
+            pygame.mixer.music.load(music_full_path)
             pygame.mixer.music.set_volume(get_music_volume())
-            pygame.mixer.music.play(-1)  # Loop indefinitely
-            print(f"Playing music: {music_path}")
+            pygame.mixer.music.play(-1)
+            print(f"Playing music: {music_full_path}")
             return True
         else:
-            print(f"Music file not found: {music_path}")
+            print(f"Music file not found: {music_full_path}")
             return False
     except Exception as e:
         print(f"Could not load music: {e}")
@@ -236,31 +245,31 @@ while running:
     # 2. Start Title Screen Music (Unique)
     # The music starts only if the flag is False (meaning it's not currently playing)
     if currentmenu == 'title' and not title_music_playing:
-        start_music_path = os.path.join("music", "start.wav")
+        start_music_path = os.path.join("start.wav")
         if play_music_with_volume(start_music_path):
             title_music_playing = True
 
     # 3. Start Breeding Music (Unique)
     elif currentmenu == 'breeding' and not breeding_music_playing:
-        breeding_music_path = os.path.join("music", "yeahhhhh yuh.wav")
+        breeding_music_path = os.path.join("yeahhhhh yuh.wav")
         if play_music_with_volume(breeding_music_path):
             breeding_music_playing = True
             
     # 4. Start Store Music (Unique)
     elif currentmenu == 'store' and not store_music_playing: 
-        store_music_path = os.path.join("music", "shop.wav")
+        store_music_path = os.path.join("shop.wav")
         if play_music_with_volume(store_music_path):
             store_music_playing = True
             
     # 5. Start Minigame Music (Unique)
     elif currentmenu == 'minigame' and not minigame_music_playing: 
-        minigame_music_path = os.path.join("music", "boss battle.wav")
+        minigame_music_path = os.path.join("boss battle.wav")
         if play_music_with_volume(minigame_music_path):
             minigame_music_playing = True
             
     # 6. Start General Game Music (Covers Home, Help)
     elif currentmenu in ['homescreen', 'help'] and not general_music_playing:
-        journey_music_path = os.path.join("music", "journey.wav")
+        journey_music_path = os.path.join("journey.wav")
         if play_music_with_volume(journey_music_path):
             general_music_playing = True
             

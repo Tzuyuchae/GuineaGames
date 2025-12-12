@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from db_connect import get_db
+from ..db_connect import get_db
 from datetime import datetime
-import models, schemas, json, traceback
+import json
+import traceback
+from .. import models, schemas
 import random
 
 # --- IMPORT PARENT DIRECTORY ---
@@ -11,7 +13,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # ------------------------------------
 
-from genetics import BreedingEngine, GeneticCode, PunnettSquare, initialize_genetics_system
+from ..genetics import BreedingEngine, GeneticCode, PunnettSquare, initialize_genetics_system
 
 router = APIRouter(prefix="/genetics", tags=["Genetics"])
 

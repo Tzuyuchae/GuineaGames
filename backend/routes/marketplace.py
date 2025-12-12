@@ -5,9 +5,9 @@ Handles pet trading, valuation, and portfolio management
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from db_connect import get_db
-import models, schemas
-from pricing import RarityCalculator
+from ..db_connect import get_db
+from ..import models, schemas
+from ..pricing import RarityCalculator
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
 

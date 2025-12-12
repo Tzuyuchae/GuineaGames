@@ -7,8 +7,8 @@ import random
 import json
 from typing import List, Dict, Tuple
 from sqlalchemy.orm import Session
-import models, schemas
-from pricing import RarityCalculator
+from .import models, schemas
+from .pricing import RarityCalculator
 
 # =====================
 # PUNNETT SQUARE LOGIC

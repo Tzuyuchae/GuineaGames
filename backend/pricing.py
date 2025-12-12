@@ -4,7 +4,7 @@ Calculates market value based on genetic rarity.
 """
 
 from sqlalchemy.orm import Session
-import models
+from .import models
 
 
 class RarityCalculator:

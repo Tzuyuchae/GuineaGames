@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from db_connect import get_db
-import models, schemas
+from ..db_connect import get_db
+from ..import models, schemas
 import json
 import datetime
 from typing import List
 
 # Add these imports at the top of the file
-from genetics import GeneticCode, BreedingEngine
-from pricing import RarityCalculator
+from ..genetics import GeneticCode, BreedingEngine
+from ..pricing import RarityCalculator
 
 # --- THIS LINE IS CRITICAL (It was missing in the broken version) ---
 router = APIRouter(prefix="/pets", tags=["Pets"])
